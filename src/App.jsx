@@ -8,6 +8,7 @@ import { useState, useRef } from "react";
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MESSAGE_MAX = 600;
 
 export default function App() {
   const [values, setValues] = useState({ name: "", email: "", message: "" });
@@ -19,7 +20,11 @@ export default function App() {
   const validate = (field, val) => {
     if (field === "name") return val.trim().length < 2 ? "Enter your full name." : "";
     if (field === "email") return !EMAIL_RE.test(val) ? "Enter a valid email address." : "";
-    if (field === "message") return val.trim().length < 10 ? "Say a little more — at least 10 characters." : "";
+    if (field === "message") {
+      if (val.trim().length < 10) return "Say a little more — at least 10 characters.";
+      if (val.length > MESSAGE_MAX) return `Keep it under ${MESSAGE_MAX} characters.`;
+      return "";
+    }
     return "";
   };
 
@@ -56,6 +61,10 @@ export default function App() {
       if (liveRegionRef.current) liveRegionRef.current.textContent = "Message sent.";
     }, 1400);
   };
+
+  const remaining = MESSAGE_MAX - values.message.length;
+  const counterState =
+    remaining < 0 ? "bc-counter-over" : remaining <= 60 ? "bc-counter-warn" : "";
 
   const resetForm = () => {
     setValues({ name: "", email: "", message: "" });
@@ -293,6 +302,24 @@ export default function App() {
         .bc-field.bc-error textarea {
           border-color: var(--danger);
         }
+        .bc-field-foot {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-top: 6px;
+        }
+        .bc-counter {
+          margin-left: auto;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 12px;
+          color: var(--text-muted);
+          font-variant-numeric: tabular-nums;
+          transition: color 0.2s ease;
+        }
+        .bc-counter.bc-counter-warn { color: var(--accent); }
+        .bc-counter.bc-counter-over { color: var(--danger); }
+
         .bc-error-msg {
           color: var(--danger);
           font-size: 12.5px;
@@ -509,7 +536,12 @@ export default function App() {
                     onBlur={handleBlur("message")}
                     aria-invalid={!!(errors.message && touched.message)}
                   />
-                  {errors.message && touched.message && <div className="bc-error-msg">{errors.message}</div>}
+                  <div className="bc-field-foot">
+                    {errors.message && touched.message && <div className="bc-error-msg">{errors.message}</div>}
+                    <span className={`bc-counter ${counterState}`}>
+                      {values.message.length}/{MESSAGE_MAX}
+                    </span>
+                  </div>
                 </div>
 
                 <button type="submit" className="bc-submit" disabled={status === "sending"}>

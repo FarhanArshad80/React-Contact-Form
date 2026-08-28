@@ -9,6 +9,7 @@ import { useState, useRef } from "react";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MESSAGE_MAX = 600;
+const FIELD_ORDER = ["name", "email", "message"];
 
 export default function App() {
   const [values, setValues] = useState({ name: "", email: "", message: "" });
@@ -16,6 +17,7 @@ export default function App() {
   const [touched, setTouched] = useState({});
   const [status, setStatus] = useState("idle"); // idle | sending | sent
   const liveRegionRef = useRef(null);
+  const fieldRefs = useRef({});
 
   const validate = (field, val) => {
     if (field === "name") return val.trim().length < 2 ? "Enter your full name." : "";
@@ -51,8 +53,14 @@ export default function App() {
     setErrors(nextErrors);
     setTouched({ name: true, email: true, message: true });
 
-    const hasError = Object.values(nextErrors).some(Boolean);
-    if (hasError) return;
+    // Move focus to the first field that failed so keyboard and screen
+    // reader users are taken to the problem instead of being left on a
+    // submit button that silently did nothing.
+    const firstInvalid = FIELD_ORDER.find((field) => nextErrors[field]);
+    if (firstInvalid) {
+      fieldRefs.current[firstInvalid]?.focus();
+      return;
+    }
 
     setStatus("sending");
     // Simulated send — swap for a real request when wiring up a backend.
@@ -503,6 +511,7 @@ export default function App() {
                   <input
                     id="bc-name"
                     type="text"
+                    ref={(el) => (fieldRefs.current.name = el)}
                     placeholder="Jordan Blake"
                     value={values.name}
                     onChange={handleChange("name")}
@@ -517,6 +526,7 @@ export default function App() {
                   <input
                     id="bc-email"
                     type="email"
+                    ref={(el) => (fieldRefs.current.email = el)}
                     placeholder="jordan@company.com"
                     value={values.email}
                     onChange={handleChange("email")}
@@ -530,6 +540,7 @@ export default function App() {
                   <label htmlFor="bc-message">Your message</label>
                   <textarea
                     id="bc-message"
+                    ref={(el) => (fieldRefs.current.message = el)}
                     placeholder="What can we help with?"
                     value={values.message}
                     onChange={handleChange("message")}

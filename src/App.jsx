@@ -517,8 +517,11 @@ export default function App() {
                     onChange={handleChange("name")}
                     onBlur={handleBlur("name")}
                     aria-invalid={!!(errors.name && touched.name)}
+                    aria-describedby={errors.name && touched.name ? "bc-name-error" : undefined}
                   />
-                  {errors.name && touched.name && <div className="bc-error-msg">{errors.name}</div>}
+                  {errors.name && touched.name && (
+                    <div className="bc-error-msg" id="bc-name-error">{errors.name}</div>
+                  )}
                 </div>
 
                 <div className={`bc-field ${errors.email && touched.email ? "bc-error" : ""}`}>
@@ -532,8 +535,11 @@ export default function App() {
                     onChange={handleChange("email")}
                     onBlur={handleBlur("email")}
                     aria-invalid={!!(errors.email && touched.email)}
+                    aria-describedby={errors.email && touched.email ? "bc-email-error" : undefined}
                   />
-                  {errors.email && touched.email && <div className="bc-error-msg">{errors.email}</div>}
+                  {errors.email && touched.email && (
+                    <div className="bc-error-msg" id="bc-email-error">{errors.email}</div>
+                  )}
                 </div>
 
                 <div className={`bc-field ${errors.message && touched.message ? "bc-error" : ""}`}>
@@ -546,10 +552,21 @@ export default function App() {
                     onChange={handleChange("message")}
                     onBlur={handleBlur("message")}
                     aria-invalid={!!(errors.message && touched.message)}
+                    aria-describedby={
+                      errors.message && touched.message
+                        ? "bc-message-error bc-message-counter"
+                        : "bc-message-counter"
+                    }
                   />
                   <div className="bc-field-foot">
-                    {errors.message && touched.message && <div className="bc-error-msg">{errors.message}</div>}
-                    <span className={`bc-counter ${counterState}`}>
+                    {errors.message && touched.message && (
+                      <div className="bc-error-msg" id="bc-message-error">{errors.message}</div>
+                    )}
+                    <span
+                      className={`bc-counter ${counterState}`}
+                      id="bc-message-counter"
+                      aria-label={`${values.message.length} of ${MESSAGE_MAX} characters used`}
+                    >
                       {values.message.length}/{MESSAGE_MAX}
                     </span>
                   </div>

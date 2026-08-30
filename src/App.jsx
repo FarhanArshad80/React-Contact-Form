@@ -10,6 +10,7 @@ import { useState, useRef } from "react";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MESSAGE_MAX = 600;
 const FIELD_ORDER = ["name", "email", "message"];
+const FIELD_LABELS = { name: "your name", email: "your email", message: "your message" };
 
 export default function App() {
   const [values, setValues] = useState({ name: "", email: "", message: "" });
@@ -56,12 +57,21 @@ export default function App() {
     // Move focus to the first field that failed so keyboard and screen
     // reader users are taken to the problem instead of being left on a
     // submit button that silently did nothing.
-    const firstInvalid = FIELD_ORDER.find((field) => nextErrors[field]);
-    if (firstInvalid) {
-      fieldRefs.current[firstInvalid]?.focus();
+    const invalid = FIELD_ORDER.filter((field) => nextErrors[field]);
+    if (invalid.length) {
+      // Focus alone only reveals the first problem. The live region says how
+      // much is left to fix, so nobody has to tab the form to find out.
+      if (liveRegionRef.current) {
+        liveRegionRef.current.textContent =
+          invalid.length === 1
+            ? `1 field needs attention: ${nextErrors[invalid[0]]}`
+            : `${invalid.length} fields need attention. Starting with ${FIELD_LABELS[invalid[0]]}: ${nextErrors[invalid[0]]}`;
+      }
+      fieldRefs.current[invalid[0]]?.focus();
       return;
     }
 
+    if (liveRegionRef.current) liveRegionRef.current.textContent = "Sending your message.";
     setStatus("sending");
     // Simulated send — swap for a real request when wiring up a backend.
     setTimeout(() => {

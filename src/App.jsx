@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 /**
  * Contact page — "Beacon" concept.
@@ -11,14 +11,58 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MESSAGE_MAX = 600;
 const FIELD_ORDER = ["name", "email", "message"];
 const FIELD_LABELS = { name: "your name", email: "your email", message: "your message" };
+const DRAFT_KEY = "beacon.contact-draft";
+const EMPTY_VALUES = { name: "", email: "", message: "" };
+
+// A half-written message should survive a reload or a stray back button.
+// Storage can be unavailable (private windows, blocked site data) or hold
+// junk from an older build, so every read falls back to an empty form.
+function loadDraft() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DRAFT_KEY));
+    if (!saved || typeof saved !== "object") return EMPTY_VALUES;
+    return {
+      name: typeof saved.name === "string" ? saved.name : "",
+      email: typeof saved.email === "string" ? saved.email : "",
+      message: typeof saved.message === "string" ? saved.message : "",
+    };
+  } catch {
+    return EMPTY_VALUES;
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* nothing to clean up if storage is unavailable */
+  }
+}
 
 export default function App() {
-  const [values, setValues] = useState({ name: "", email: "", message: "" });
+  const [values, setValues] = useState(loadDraft);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [status, setStatus] = useState("idle"); // idle | sending | sent
   const liveRegionRef = useRef(null);
   const fieldRefs = useRef({});
+
+  // Keep the stored draft in step with what is on screen, but stop once the
+  // message is away — a sent form should not reappear on the next visit.
+  useEffect(() => {
+    if (status === "sent") return;
+
+    if (!values.name && !values.email && !values.message) {
+      clearDraft();
+      return;
+    }
+
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(values));
+    } catch {
+      /* the form still works without a saved draft */
+    }
+  }, [values, status]);
 
   const validate = (field, val) => {
     if (field === "name") return val.trim().length < 2 ? "Enter your full name." : "";
@@ -76,6 +120,7 @@ export default function App() {
     // Simulated send — swap for a real request when wiring up a backend.
     setTimeout(() => {
       setStatus("sent");
+      clearDraft();
       if (liveRegionRef.current) liveRegionRef.current.textContent = "Message sent.";
     }, 1400);
   };
@@ -85,7 +130,8 @@ export default function App() {
     remaining < 0 ? "bc-counter-over" : remaining <= 60 ? "bc-counter-warn" : "";
 
   const resetForm = () => {
-    setValues({ name: "", email: "", message: "" });
+    clearDraft();
+    setValues(EMPTY_VALUES);
     setErrors({});
     setTouched({});
     setStatus("idle");

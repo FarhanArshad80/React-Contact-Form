@@ -9,10 +9,30 @@ import { useState, useRef, useEffect } from "react";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MESSAGE_MAX = 600;
-const FIELD_ORDER = ["name", "email", "message"];
-const FIELD_LABELS = { name: "your name", email: "your email", message: "your message" };
+const FIELD_ORDER = ["topic", "name", "email", "message"];
+const FIELD_LABELS = {
+  topic: "the topic",
+  name: "your name",
+  email: "your email",
+  message: "your message",
+};
 const DRAFT_KEY = "beacon.contact-draft";
-const EMPTY_VALUES = { name: "", email: "", message: "" };
+const EMPTY_VALUES = { topic: "", name: "", email: "", message: "" };
+
+// Everything lands in the same inbox today, but saying which desk picks it up
+// — and how quickly — sets a truthful expectation before anyone hits send.
+const TOPICS = [
+  { id: "support", label: "Support", desk: "our support team", reply: "5 minutes" },
+  { id: "sales", label: "Sales", desk: "our sales team", reply: "1 hour" },
+  { id: "feedback", label: "Feedback", desk: "our product team", reply: "1 business day" },
+  { id: "other", label: "Something else", desk: "our team", reply: "1 business day" },
+];
+
+const DEFAULT_REPLY = "5 minutes";
+
+function findTopic(id) {
+  return TOPICS.find((topic) => topic.id === id);
+}
 
 // A half-written message should survive a reload or a stray back button.
 // Storage can be unavailable (private windows, blocked site data) or hold
@@ -22,6 +42,7 @@ function loadDraft() {
     const saved = JSON.parse(localStorage.getItem(DRAFT_KEY));
     if (!saved || typeof saved !== "object") return EMPTY_VALUES;
     return {
+      topic: findTopic(saved.topic) ? saved.topic : "",
       name: typeof saved.name === "string" ? saved.name : "",
       email: typeof saved.email === "string" ? saved.email : "",
       message: typeof saved.message === "string" ? saved.message : "",
@@ -52,7 +73,7 @@ export default function App() {
   useEffect(() => {
     if (status === "sent") return;
 
-    if (!values.name && !values.email && !values.message) {
+    if (!values.topic && !values.name && !values.email && !values.message) {
       clearDraft();
       return;
     }
@@ -65,6 +86,7 @@ export default function App() {
   }, [values, status]);
 
   const validate = (field, val) => {
+    if (field === "topic") return !findTopic(val) ? "Pick what this is about." : "";
     if (field === "name") return val.trim().length < 2 ? "Enter your full name." : "";
     if (field === "email") return !EMAIL_RE.test(val) ? "Enter a valid email address." : "";
     if (field === "message") {
@@ -91,12 +113,13 @@ export default function App() {
   const handleSubmit = (e) => {
     e.preventDefault();
     const nextErrors = {
+      topic: validate("topic", values.topic),
       name: validate("name", values.name),
       email: validate("email", values.email),
       message: validate("message", values.message),
     };
     setErrors(nextErrors);
-    setTouched({ name: true, email: true, message: true });
+    setTouched({ topic: true, name: true, email: true, message: true });
 
     // Move focus to the first field that failed so keyboard and screen
     // reader users are taken to the problem instead of being left on a
@@ -125,9 +148,16 @@ export default function App() {
     }, 1400);
   };
 
+  const selectedTopic = findTopic(values.topic);
   const remaining = MESSAGE_MAX - values.message.length;
   const counterState =
     remaining < 0 ? "bc-counter-over" : remaining <= 60 ? "bc-counter-warn" : "";
+
+  const handleTopicSelect = (id) => () => {
+    setValues((v) => ({ ...v, topic: id }));
+    setTouched((t) => ({ ...t, topic: true }));
+    setErrors((er) => ({ ...er, topic: validate("topic", id) }));
+  };
 
   const resetForm = () => {
     clearDraft();
@@ -343,6 +373,57 @@ export default function App() {
           color: var(--text-muted);
           margin-bottom: 8px;
         }
+        .bc-topics {
+          border: none;
+          padding: 0;
+          margin: 0 0 20px;
+          min-width: 0;
+        }
+        .bc-topics legend {
+          padding: 0;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 12px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--text-muted);
+          margin-bottom: 8px;
+        }
+        .bc-topic-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .bc-topic {
+          background: var(--bg);
+          border: 1px solid var(--line);
+          border-radius: 999px;
+          padding: 9px 16px;
+          font-size: 13.5px;
+          font-weight: 500;
+          color: var(--text-muted);
+          cursor: pointer;
+          transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+        }
+        .bc-topic:hover { border-color: var(--accent); color: var(--text); }
+        .bc-topic-on {
+          border-color: var(--accent);
+          background: var(--accent-soft);
+          color: var(--text);
+        }
+        /* The chip is the control; the radio stays for keyboard and
+           screen reader users but is not drawn. */
+        .bc-topic input {
+          position: absolute;
+          width: 1px; height: 1px;
+          opacity: 0;
+          pointer-events: none;
+        }
+        .bc-topic:has(input:focus-visible) {
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
+        }
+        .bc-topics.bc-error .bc-topic { border-color: var(--danger); }
+
         .bc-field input,
         .bc-field textarea {
           width: 100%;
@@ -522,7 +603,7 @@ export default function App() {
         <div>
           <div className="bc-eyebrow">
             <span className="bc-eyebrow-dot" aria-hidden="true" />
-            Usually replies within 5 minutes
+            Usually replies within {selectedTopic?.reply || DEFAULT_REPLY}
           </div>
 
           <h1 className="bc-h1">
@@ -557,11 +638,45 @@ export default function App() {
                   </svg>
                 </div>
                 <h3>Message sent</h3>
-                <p>Thanks, {values.name.split(" ")[0] || "there"} — we'll get back to you at {values.email}.</p>
+                <p>
+                  Thanks, {values.name.split(" ")[0] || "there"} —{" "}
+                  {selectedTopic?.desk || "our team"} will get back to you at{" "}
+                  {values.email}.
+                </p>
                 <button type="button" className="bc-again" onClick={resetForm}>Send another message</button>
               </div>
             ) : (
               <>
+                <fieldset
+                  className={`bc-field bc-topics ${errors.topic && touched.topic ? "bc-error" : ""}`}
+                  aria-describedby={errors.topic && touched.topic ? "bc-topic-error" : undefined}
+                >
+                  <legend>What's this about?</legend>
+
+                  <div className="bc-topic-row">
+                    {TOPICS.map((topic, index) => (
+                      <label
+                        key={topic.id}
+                        className={`bc-topic ${values.topic === topic.id ? "bc-topic-on" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="bc-topic"
+                          value={topic.id}
+                          ref={index === 0 ? (el) => (fieldRefs.current.topic = el) : undefined}
+                          checked={values.topic === topic.id}
+                          onChange={handleTopicSelect(topic.id)}
+                        />
+                        {topic.label}
+                      </label>
+                    ))}
+                  </div>
+
+                  {errors.topic && touched.topic && (
+                    <div className="bc-error-msg" id="bc-topic-error">{errors.topic}</div>
+                  )}
+                </fieldset>
+
                 <div className={`bc-field ${errors.name && touched.name ? "bc-error" : ""}`}>
                   <label htmlFor="bc-name">Your name</label>
                   <input

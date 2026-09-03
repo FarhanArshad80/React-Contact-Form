@@ -30,8 +30,73 @@ const TOPICS = [
 
 const DEFAULT_REPLY = "5 minutes";
 
+// The desk keeps its own hours, and they are the desk's — not the
+// visitor's. Reading the clock in this timezone is what keeps "back at
+// 9:00" true for someone writing in at 3am from another continent.
+const DESK_TIMEZONE = "America/New_York";
+const DESK_TIMEZONE_LABEL = "ET";
+const OPEN_HOUR = 9;
+const CLOSE_HOUR = 18;
+const WORKING_DAYS = [1, 2, 3, 4, 5];
+const DAY_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+const DAY_NAMES = [
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+];
+
 function findTopic(id) {
   return TOPICS.find((topic) => topic.id === id);
+}
+
+// The desk's wall clock: the weekday and hour where the team actually sits.
+// h23 is asked for explicitly because hour12:false reports midnight as 24
+// in some engines, which would read as an hour that does not exist.
+function deskClock(now) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: DESK_TIMEZONE,
+    weekday: "short",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(now);
+
+  const read = (type) => parts.find((part) => part.type === type)?.value;
+
+  return {
+    day: DAY_INDEX[read("weekday")] ?? 1,
+    hour: Number(read("hour")),
+  };
+}
+
+function openingTimeText() {
+  const hour = OPEN_HOUR % 12 || 12;
+  return `${hour}:00 ${OPEN_HOUR < 12 ? "am" : "pm"} ${DESK_TIMEZONE_LABEL}`;
+}
+
+// Open, or shut with somewhere to point. A promise of a five-minute reply
+// at 2am on a Sunday is not a promise anyone can keep, so out of hours the
+// eyebrow says when the desk is back instead.
+function deskStatus(now = new Date()) {
+  const { day, hour } = deskClock(now);
+  const working = WORKING_DAYS.includes(day);
+
+  if (working && hour >= OPEN_HOUR && hour < CLOSE_HOUR) {
+    return { open: true };
+  }
+
+  // Still before opening on a working day — the wait is only this morning.
+  if (working && hour < OPEN_HOUR) {
+    return { open: false, returns: `at ${openingTimeText()}` };
+  }
+
+  // Otherwise walk forward to the next working day.
+  let ahead = 1;
+  while (!WORKING_DAYS.includes((day + ahead) % 7)) {
+    ahead += 1;
+  }
+
+  const nextDay = (day + ahead) % 7;
+  const when = ahead === 1 ? "tomorrow" : DAY_NAMES[nextDay];
+
+  return { open: false, returns: `${when} at ${openingTimeText()}` };
 }
 
 // A half-written message should survive a reload or a stray back button.
@@ -65,8 +130,16 @@ export default function App() {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [status, setStatus] = useState("idle"); // idle | sending | sent
+  const [desk, setDesk] = useState(deskStatus);
   const liveRegionRef = useRef(null);
   const fieldRefs = useRef({});
+
+  // A tab left open across the desk closing should not keep promising a
+  // five-minute reply, so the status is re-read every minute.
+  useEffect(() => {
+    const timer = setInterval(() => setDesk(deskStatus()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Keep the stored draft in step with what is on screen, but stop once the
   // message is away — a sent form should not reappear on the next visit.
@@ -299,6 +372,15 @@ export default function App() {
           border-radius: 50%;
           background: var(--accent);
           animation: bc-blink 1.8s ease-in-out infinite;
+        }
+        /* Out of hours the light is steady and quiet — a blinking dot reads
+           as someone waiting at the other end. */
+        .bc-eyebrow-closed {
+          color: var(--text-muted);
+        }
+        .bc-eyebrow-dot-off {
+          background: var(--text-muted);
+          animation: none;
         }
         @keyframes bc-blink {
           0%, 100% { opacity: 1; }
@@ -601,9 +683,14 @@ export default function App() {
 
       <section className="bc-section">
         <div>
-          <div className="bc-eyebrow">
-            <span className="bc-eyebrow-dot" aria-hidden="true" />
-            Usually replies within {selectedTopic?.reply || DEFAULT_REPLY}
+          <div className={`bc-eyebrow ${desk.open ? "" : "bc-eyebrow-closed"}`}>
+            <span
+              className={`bc-eyebrow-dot ${desk.open ? "" : "bc-eyebrow-dot-off"}`}
+              aria-hidden="true"
+            />
+            {desk.open
+              ? `Open now — usually replies within ${selectedTopic?.reply || DEFAULT_REPLY}`
+              : `Closed — the desk is back ${desk.returns}`}
           </div>
 
           <h1 className="bc-h1">
@@ -641,7 +728,8 @@ export default function App() {
                 <p>
                   Thanks, {values.name.split(" ")[0] || "there"} —{" "}
                   {selectedTopic?.desk || "our team"} will get back to you at{" "}
-                  {values.email}.
+                  {values.email}
+                  {desk.open ? "." : `, once the desk opens ${desk.returns}.`}
                 </p>
                 <button type="button" className="bc-again" onClick={resetForm}>Send another message</button>
               </div>

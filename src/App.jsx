@@ -19,6 +19,35 @@ const FIELD_LABELS = {
 const DRAFT_KEY = "beacon.contact-draft";
 const EMPTY_VALUES = { topic: "", name: "", email: "", message: "" };
 
+// Attachments. A screenshot answers "what does the error look like" faster
+// than any three paragraphs, so the form takes images and PDFs — capped
+// because a support desk inbox is not a file host.
+const MAX_FILES = 3;
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"];
+const ACCEPT_ATTR = ACCEPTED_TYPES.join(",");
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Says what is wrong with one file, or nothing if it is fine. The type check
+// leans on the browser's sniffing rather than the extension, which is the
+// half a renamed .exe cannot lie about as easily.
+function fileProblem(file) {
+  if (!ACCEPTED_TYPES.includes(file.type)) {
+    return `${file.name} isn't an image or PDF.`;
+  }
+
+  if (file.size > MAX_FILE_BYTES) {
+    return `${file.name} is ${formatBytes(file.size)} — the limit is ${formatBytes(MAX_FILE_BYTES)}.`;
+  }
+
+  return "";
+}
+
 // Everything lands in the same inbox today, but saying which desk picks it up
 // — and how quickly — sets a truthful expectation before anyone hits send.
 const TOPICS = [
@@ -131,8 +160,12 @@ export default function App() {
   const [touched, setTouched] = useState({});
   const [status, setStatus] = useState("idle"); // idle | sending | sent
   const [desk, setDesk] = useState(deskStatus);
+  const [files, setFiles] = useState([]);
+  const [fileError, setFileError] = useState("");
+  const [dragging, setDragging] = useState(false);
   const liveRegionRef = useRef(null);
   const fieldRefs = useRef({});
+  const fileInputRef = useRef(null);
 
   // A tab left open across the desk closing should not keep promising a
   // five-minute reply, so the status is re-read every minute.
@@ -181,6 +214,84 @@ export default function App() {
   const handleBlur = (field) => (e) => {
     setTouched((t) => ({ ...t, [field]: true }));
     setErrors((er) => ({ ...er, [field]: validate(field, e.target.value) }));
+  };
+
+  // Object URLs outlive the component unless they are handed back. Removing
+  // and resetting give theirs back as they go; this catches whatever is
+  // still attached when the form itself goes away. It reads through a ref so
+  // that adding a second file does not trip the cleanup for the first.
+  const filesRef = useRef(files);
+  filesRef.current = files;
+
+  useEffect(
+    () => () => filesRef.current.forEach((item) => URL.revokeObjectURL(item.url)),
+    []
+  );
+
+  const addFiles = (incoming) => {
+    const candidates = Array.from(incoming || []);
+    if (!candidates.length) return;
+
+    const accepted = [];
+    let problem = "";
+
+    for (const file of candidates) {
+      const issue = fileProblem(file);
+
+      if (issue) {
+        problem = problem || issue;
+        continue;
+      }
+
+      // Dropping the same screenshot twice is a slip, not a request for two
+      // copies of it.
+      const alreadyHere = (item) =>
+        item.file.name === file.name && item.file.size === file.size;
+
+      if (files.some(alreadyHere) || accepted.some(alreadyHere)) continue;
+
+      accepted.push({
+        id: `${file.name}-${file.size}-${file.lastModified}`,
+        file,
+        url: URL.createObjectURL(file),
+      });
+    }
+
+    const room = MAX_FILES - files.length;
+    const kept = accepted.slice(0, Math.max(room, 0));
+
+    // Anything past the cap is dropped rather than silently swapped in, and
+    // its object URL goes back before it is forgotten about.
+    accepted.slice(kept.length).forEach((item) => URL.revokeObjectURL(item.url));
+
+    if (accepted.length > kept.length) {
+      problem = problem || `You can attach up to ${MAX_FILES} files.`;
+    }
+
+    setFileError(problem);
+    if (kept.length) setFiles((current) => [...current, ...kept]);
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent =
+        problem ||
+        (kept.length === 1
+          ? `${kept[0].file.name} attached.`
+          : `${kept.length} files attached.`);
+    }
+  };
+
+  const removeFile = (id) => () => {
+    const going = files.find((item) => item.id === id);
+    if (going) URL.revokeObjectURL(going.url);
+
+    setFiles((current) => current.filter((item) => item.id !== id));
+    setFileError("");
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    addFiles(e.dataTransfer.files);
   };
 
   const handleSubmit = (e) => {
@@ -234,6 +345,9 @@ export default function App() {
 
   const resetForm = () => {
     clearDraft();
+    files.forEach((item) => URL.revokeObjectURL(item.url));
+    setFiles([]);
+    setFileError("");
     setValues(EMPTY_VALUES);
     setErrors({});
     setTouched({});
@@ -556,6 +670,126 @@ export default function App() {
           gap: 5px;
         }
 
+        /* ---------- Attachments ---------- */
+        .bc-optional {
+          margin-left: 6px;
+          font-size: 11px;
+          font-weight: 400;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: var(--text-muted);
+        }
+        .bc-drop {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          padding: 20px 16px;
+          border: 1px dashed var(--line);
+          border-radius: 10px;
+          background: var(--bg-elevated);
+          color: var(--text-muted);
+          text-align: center;
+          transition: border-color 0.2s ease, background 0.2s ease;
+        }
+        .bc-drop.bc-drop-on {
+          border-color: var(--accent);
+          background: var(--accent-soft);
+        }
+        .bc-drop.bc-error { border-color: var(--danger); }
+        .bc-drop p { margin: 0; font-size: 14px; color: var(--text); }
+        .bc-drop small { font-size: 12px; }
+        .bc-browse {
+          padding: 0;
+          border: none;
+          background: none;
+          color: var(--accent);
+          font: inherit;
+          text-decoration: underline;
+          cursor: pointer;
+        }
+        /* The real input stays in the layout for focus and screen readers;
+           the dashed panel above is what anyone actually clicks. */
+        .bc-file-input {
+          position: absolute;
+          width: 1px; height: 1px;
+          overflow: hidden;
+          opacity: 0;
+        }
+
+        .bc-attachments {
+          list-style: none;
+          margin: 10px 0 0;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .bc-attachment {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          background: var(--bg-elevated-2);
+        }
+        .bc-attachment-thumb {
+          width: 34px; height: 34px;
+          flex-shrink: 0;
+          border-radius: 6px;
+          object-fit: cover;
+          background: var(--bg);
+        }
+        .bc-attachment-pdf {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 10px;
+          font-weight: 600;
+          color: var(--accent);
+        }
+        .bc-attachment-meta {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 0;
+          flex: 1;
+        }
+        .bc-attachment-meta strong {
+          font-size: 13px;
+          font-weight: 500;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .bc-attachment-meta small { font-size: 11.5px; color: var(--text-muted); }
+        .bc-attachment-remove {
+          flex-shrink: 0;
+          width: 26px; height: 26px;
+          border: none;
+          border-radius: 50%;
+          background: transparent;
+          color: var(--text-muted);
+          font-size: 18px;
+          line-height: 1;
+          cursor: pointer;
+          transition: background 0.2s ease, color 0.2s ease;
+        }
+        .bc-attachment-remove:hover { background: var(--accent-soft); color: var(--text); }
+        .bc-attachment-note {
+          display: block;
+          margin-top: 8px;
+          font-size: 11.5px;
+          color: var(--text-muted);
+        }
+        .bc-success-files {
+          color: var(--text-muted);
+          font-size: 13px;
+          margin: -12px 0 20px;
+        }
+
         .bc-submit {
           width: 100%;
           background: var(--accent);
@@ -731,6 +965,13 @@ export default function App() {
                   {values.email}
                   {desk.open ? "." : `, once the desk opens ${desk.returns}.`}
                 </p>
+                {files.length > 0 && (
+                  <p className="bc-success-files">
+                    {files.length === 1
+                      ? `${files[0].file.name} went with it.`
+                      : `${files.length} attachments went with it.`}
+                  </p>
+                )}
                 <button type="button" className="bc-again" onClick={resetForm}>Send another message</button>
               </div>
             ) : (
@@ -829,6 +1070,94 @@ export default function App() {
                       {values.message.length}/{MESSAGE_MAX}
                     </span>
                   </div>
+                </div>
+
+                <div className="bc-field">
+                  <label htmlFor="bc-files">
+                    Attachments <span className="bc-optional">optional</span>
+                  </label>
+
+                  <div
+                    className={`bc-drop ${dragging ? "bc-drop-on" : ""} ${fileError ? "bc-error" : ""}`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragging(true);
+                    }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={handleDrop}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                      <path d="M21.4 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.2-9.19a3.67 3.67 0 0 1 5.18 5.18l-9.2 9.2a1.83 1.83 0 0 1-2.59-2.6l8.5-8.48" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+
+                    <p>
+                      Drop a screenshot here, or{" "}
+                      <button
+                        type="button"
+                        className="bc-browse"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        browse
+                      </button>
+                    </p>
+
+                    <small>
+                      Images or PDF · up to {formatBytes(MAX_FILE_BYTES)} each ·
+                      {" "}{MAX_FILES} files max
+                    </small>
+
+                    <input
+                      id="bc-files"
+                      type="file"
+                      multiple
+                      accept={ACCEPT_ATTR}
+                      ref={fileInputRef}
+                      className="bc-file-input"
+                      onChange={(e) => {
+                        addFiles(e.target.files);
+                        // Cleared so picking the same file after removing it
+                        // still counts as a change.
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+
+                  {fileError && <div className="bc-error-msg">{fileError}</div>}
+
+                  {files.length > 0 && (
+                    <ul className="bc-attachments">
+                      {files.map((item) => (
+                        <li key={item.id} className="bc-attachment">
+                          {item.file.type === "application/pdf" ? (
+                            <span className="bc-attachment-thumb bc-attachment-pdf">PDF</span>
+                          ) : (
+                            <img className="bc-attachment-thumb" src={item.url} alt="" />
+                          )}
+
+                          <span className="bc-attachment-meta">
+                            <strong>{item.file.name}</strong>
+                            <small>{formatBytes(item.file.size)}</small>
+                          </span>
+
+                          <button
+                            type="button"
+                            className="bc-attachment-remove"
+                            onClick={removeFile(item.id)}
+                            aria-label={`Remove ${item.file.name}`}
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {files.length > 0 && (
+                    <small className="bc-attachment-note">
+                      Attachments aren't kept in your saved draft — reloading
+                      the page will ask for them again.
+                    </small>
+                  )}
                 </div>
 
                 <button type="submit" className="bc-submit" disabled={status === "sending"}>

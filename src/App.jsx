@@ -59,6 +59,31 @@ const TOPICS = [
 
 const DEFAULT_REPLY = "5 minutes";
 
+// A reference gives the sender something to quote when they follow up, and
+// it is the first thing a desk asks for. The prefix says which queue it
+// belongs to; the body is random rather than sequential so it does not
+// advertise how many messages came before it.
+const REFERENCE_PREFIX = { support: "SUP", sales: "SAL", feedback: "FBK", other: "GEN" };
+
+// No O/0 and no I/1: a reference has to survive being read out over the
+// phone, and those pairs are the ones that come back typed wrong.
+const REFERENCE_ALPHABET = "ACDEFHJKLMNPRTUVWXY2345789";
+const REFERENCE_LENGTH = 6;
+
+function makeReference(topicId) {
+  const prefix = REFERENCE_PREFIX[topicId] || REFERENCE_PREFIX.other;
+  const bytes = new Uint8Array(REFERENCE_LENGTH);
+
+  crypto.getRandomValues(bytes);
+
+  const body = Array.from(
+    bytes,
+    (byte) => REFERENCE_ALPHABET[byte % REFERENCE_ALPHABET.length]
+  ).join("");
+
+  return `${prefix}-${body}`;
+}
+
 // The desk keeps its own hours, and they are the desk's — not the
 // visitor's. Reading the clock in this timezone is what keeps "back at
 // 9:00" true for someone writing in at 3am from another continent.
@@ -163,6 +188,8 @@ export default function App() {
   const [files, setFiles] = useState([]);
   const [fileError, setFileError] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [reference, setReference] = useState("");
+  const [copied, setCopied] = useState(false);
   const liveRegionRef = useRef(null);
   const fieldRefs = useRef({});
   const fileInputRef = useRef(null);
@@ -190,6 +217,34 @@ export default function App() {
       /* the form still works without a saved draft */
     }
   }, [values, status]);
+
+  // "Copied" is a confirmation, not a state worth keeping - it goes back to
+  // an offer of the action a couple of seconds later.
+  useEffect(() => {
+    if (!copied) return undefined;
+
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  // The clipboard can be refused outright: an insecure context, a denied
+  // permission, an older browser. The reference is on screen either way, so
+  // that case points at it rather than reporting a failure.
+  const copyReference = async () => {
+    try {
+      await navigator.clipboard.writeText(reference);
+      setCopied(true);
+
+      if (liveRegionRef.current) {
+        liveRegionRef.current.textContent = `Reference ${reference} copied.`;
+      }
+    } catch {
+      if (liveRegionRef.current) {
+        liveRegionRef.current.textContent =
+          "Couldn't reach the clipboard — select the reference to copy it by hand.";
+      }
+    }
+  };
 
   const validate = (field, val) => {
     if (field === "topic") return !findTopic(val) ? "Pick what this is about." : "";
@@ -326,9 +381,14 @@ export default function App() {
     setStatus("sending");
     // Simulated send — swap for a real request when wiring up a backend.
     setTimeout(() => {
+      const ticket = makeReference(values.topic);
+
+      setReference(ticket);
       setStatus("sent");
       clearDraft();
-      if (liveRegionRef.current) liveRegionRef.current.textContent = "Message sent.";
+      if (liveRegionRef.current) {
+        liveRegionRef.current.textContent = `Message sent. Your reference is ${ticket}.`;
+      }
     }, 1400);
   };
 
@@ -351,6 +411,8 @@ export default function App() {
     setValues(EMPTY_VALUES);
     setErrors({});
     setTouched({});
+    setReference("");
+    setCopied(false);
     setStatus("idle");
   };
 
@@ -846,6 +908,58 @@ export default function App() {
           margin: 0 0 8px;
         }
         .bc-success p { color: var(--text-muted); font-size: 14.5px; margin: 0 0 20px; }
+        /* The reference is the one thing on this screen worth keeping, so it
+           is set apart from the prose and sized to be read aloud. */
+        .bc-reference {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          margin: -8px 0 20px;
+          padding: 8px 8px 8px 14px;
+          border: 1px solid var(--line);
+          border-radius: 999px;
+          background: var(--bg-elevated-2);
+        }
+        .bc-reference-label {
+          color: var(--text-muted);
+          font-size: 12px;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+        .bc-reference-code {
+          font-family: 'Space Grotesk', monospace;
+          font-size: 15px;
+          font-weight: 600;
+          letter-spacing: 0.08em;
+          color: var(--accent);
+          user-select: all;
+        }
+        .bc-reference-copy {
+          border: none;
+          border-radius: 999px;
+          padding: 6px 14px;
+          font-size: 12.5px;
+          font-weight: 600;
+          cursor: pointer;
+          background: var(--accent-soft);
+          color: var(--text);
+          transition: background 0.2s ease;
+        }
+        .bc-reference-copy:hover { background: var(--accent); color: #1a1204; }
+        .bc-reference-copy:focus-visible {
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
+        }
+
+        @media (max-width: 420px) {
+          .bc-reference {
+            flex-wrap: wrap;
+            justify-content: center;
+            border-radius: 14px;
+            padding: 10px 12px;
+          }
+        }
+
         .bc-again {
           background: transparent;
           border: 1px solid var(--line);
@@ -965,6 +1079,18 @@ export default function App() {
                   {values.email}
                   {desk.open ? "." : `, once the desk opens ${desk.returns}.`}
                 </p>
+                <div className="bc-reference">
+                  <span className="bc-reference-label">Your reference</span>
+                  <code className="bc-reference-code">{reference}</code>
+                  <button
+                    type="button"
+                    className="bc-reference-copy"
+                    onClick={copyReference}
+                  >
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+
                 {files.length > 0 && (
                   <p className="bc-success-files">
                     {files.length === 1

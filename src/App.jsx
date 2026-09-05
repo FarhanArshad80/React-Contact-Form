@@ -50,12 +50,46 @@ function fileProblem(file) {
 
 // Everything lands in the same inbox today, but saying which desk picks it up
 // — and how quickly — sets a truthful expectation before anyone hits send.
+// Each desk opens with the same question, and it is always the one the
+// sender could have answered in the first message. `prompt` asks it inside
+// the box; `hint` says what turns a reply into an answer rather than a
+// request for more detail.
 const TOPICS = [
-  { id: "support", label: "Support", desk: "our support team", reply: "5 minutes" },
-  { id: "sales", label: "Sales", desk: "our sales team", reply: "1 hour" },
-  { id: "feedback", label: "Feedback", desk: "our product team", reply: "1 business day" },
-  { id: "other", label: "Something else", desk: "our team", reply: "1 business day" },
+  {
+    id: "support",
+    label: "Support",
+    desk: "our support team",
+    reply: "5 minutes",
+    prompt: "What went wrong, and what were you doing when it happened?",
+    hint: "Any error message and the page you were on save us a round trip.",
+  },
+  {
+    id: "sales",
+    label: "Sales",
+    desk: "our sales team",
+    reply: "1 hour",
+    prompt: "What are you trying to do, and how big is the team?",
+    hint: "Team size and rough timeline let us quote properly the first time.",
+  },
+  {
+    id: "feedback",
+    label: "Feedback",
+    desk: "our product team",
+    reply: "1 business day",
+    prompt: "What would you change, and what made you want it changed?",
+    hint: "The moment that prompted this is worth more to us than the fix you have in mind.",
+  },
+  {
+    id: "other",
+    label: "Something else",
+    desk: "our team",
+    reply: "1 business day",
+    prompt: "What can we help with?",
+    hint: "",
+  },
 ];
+
+const DEFAULT_PROMPT = "What can we help with?";
 
 const DEFAULT_REPLY = "5 minutes";
 
@@ -701,6 +735,15 @@ export default function App() {
           background: rgba(245, 166, 35, 0.04);
         }
         .bc-field textarea { min-height: 110px; resize: vertical; }
+
+        /* Sits between the label and the box so it is read before the field
+           is filled in, not after. */
+        .bc-hint {
+          color: var(--text-muted);
+          font-size: 12.5px;
+          line-height: 1.45;
+          margin: -2px 0 8px;
+        }
         .bc-field.bc-error input,
         .bc-field.bc-error textarea {
           border-color: var(--danger);
@@ -1170,18 +1213,25 @@ export default function App() {
 
                 <div className={`bc-field ${errors.message && touched.message ? "bc-error" : ""}`}>
                   <label htmlFor="bc-message">Your message</label>
+                  {selectedTopic?.hint && (
+                    <p className="bc-hint" id="bc-message-hint">{selectedTopic.hint}</p>
+                  )}
                   <textarea
                     id="bc-message"
                     ref={(el) => (fieldRefs.current.message = el)}
-                    placeholder="What can we help with?"
+                    placeholder={selectedTopic?.prompt || DEFAULT_PROMPT}
                     value={values.message}
                     onChange={handleChange("message")}
                     onBlur={handleBlur("message")}
                     aria-invalid={!!(errors.message && touched.message)}
                     aria-describedby={
-                      errors.message && touched.message
-                        ? "bc-message-error bc-message-counter"
-                        : "bc-message-counter"
+                      [
+                        errors.message && touched.message ? "bc-message-error" : "",
+                        "bc-message-counter",
+                        selectedTopic?.hint ? "bc-message-hint" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")
                     }
                   />
                   <div className="bc-field-foot">

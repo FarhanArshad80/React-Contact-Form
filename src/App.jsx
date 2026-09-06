@@ -268,6 +268,15 @@ export default function App() {
   const [reference, setReference] = useState("");
   const [copied, setCopied] = useState(false);
   const [sent, setSent] = useState(loadSent);
+  // Whether this visit opened onto someone else's half-written message —
+  // their own from last time, or a colleague's on a shared machine. Read
+  // from storage a second time rather than from `values`, so that typing the
+  // first character does not make it look like a draft was restored.
+  const [restored, setRestored] = useState(() => {
+    const draft = loadDraft();
+
+    return FIELD_ORDER.some((field) => draft[field]);
+  });
   const liveRegionRef = useRef(null);
   const fieldRefs = useRef({});
   const fileInputRef = useRef(null);
@@ -522,6 +531,7 @@ export default function App() {
   };
 
   const resetForm = () => {
+    setRestored(false);
     clearDraft();
     files.forEach((item) => URL.revokeObjectURL(item.url));
     setFiles([]);
@@ -532,6 +542,14 @@ export default function App() {
     setReference("");
     setCopied(false);
     setStatus("idle");
+  };
+
+  // Throwing the draft away leaves an empty form and no obvious next step,
+  // so focus goes to the first question rather than staying on a button that
+  // has just erased everything around it.
+  const discardDraft = () => {
+    resetForm();
+    fieldRefs.current.topic?.focus();
   };
 
   return (
@@ -1087,6 +1105,44 @@ export default function App() {
           }
         }
 
+        /* ---------- Restored draft ---------- */
+        /* A note, not an alarm: nothing has gone wrong, the form is only
+           saying where the words in it came from. */
+        .bc-restored {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 22px;
+          padding: 11px 14px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: var(--bg-elevated-2);
+          font-size: 13px;
+        }
+        .bc-restored p {
+          margin: 0;
+          flex: 1;
+          color: var(--text-muted);
+        }
+        .bc-restored button {
+          border: none;
+          background: none;
+          padding: 0;
+          font: inherit;
+          font-weight: 600;
+          color: var(--accent);
+          cursor: pointer;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+        .bc-restored-close {
+          font-size: 17px;
+          line-height: 1;
+          color: var(--text-muted) !important;
+          text-decoration: none !important;
+        }
+        .bc-restored-close:hover { color: var(--text) !important; }
+
         /* ---------- Past references ---------- */
         /* Closed by default and quiet: this is a filing cabinet, not part of
            the task. It should be findable without ever competing with the
@@ -1289,6 +1345,29 @@ export default function App() {
               </div>
             ) : (
               <>
+                {/* The draft has always come back silently, which reads as a
+                    form that remembered wrong rather than one that
+                    remembered — and on a shared machine it is a stranger's
+                    half-written message with no obvious way out of it. */}
+                {restored && (
+                  <div className="bc-restored" role="status">
+                    <p>Picked up where you left off.</p>
+
+                    <button type="button" onClick={discardDraft}>
+                      Start fresh
+                    </button>
+
+                    <button
+                      type="button"
+                      className="bc-restored-close"
+                      onClick={() => setRestored(false)}
+                      aria-label="Dismiss"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+
                 <fieldset
                   className={`bc-field bc-topics ${errors.topic && touched.topic ? "bc-error" : ""}`}
                   aria-describedby={errors.topic && touched.topic ? "bc-topic-error" : undefined}

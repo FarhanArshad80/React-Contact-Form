@@ -17,6 +17,11 @@ const FIELD_LABELS = {
   message: "your message",
 };
 const DRAFT_KEY = "beacon.contact-draft";
+const SENT_KEY = "beacon.contact-sent";
+// Enough to cover the reason someone is looking — the message they sent last
+// week and cannot find the confirmation for. Past that it is history, and
+// history belongs in the inbox rather than on the form.
+const MAX_SENT = 5;
 const EMPTY_VALUES = { topic: "", name: "", email: "", message: "" };
 
 // Attachments. A screenshot answers "what does the error look like" faster
@@ -205,6 +210,44 @@ function loadDraft() {
   }
 }
 
+// References sent from this browser, newest first. Only the reference, the
+// desk it went to and when — no name, email or message body, because none of
+// that has to sit in storage for the reference to be useful, and all of it
+// would be sitting on a shared machine if it did.
+function loadSent() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SENT_KEY));
+
+    if (!Array.isArray(saved)) return [];
+
+    return saved
+      .filter(
+        (item) =>
+          item &&
+          typeof item.reference === "string" &&
+          Number.isFinite(item.at)
+      )
+      .slice(0, MAX_SENT);
+  } catch {
+    return [];
+  }
+}
+
+// Days rather than hours: someone checking a reference is asking "was that
+// the one from Tuesday?", not counting the minutes since.
+function sentWhen(at) {
+  const days = Math.floor((Date.now() - at) / 86_400_000);
+
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 30) return `${days} days ago`;
+
+  return new Date(at).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+  });
+}
+
 function clearDraft() {
   try {
     localStorage.removeItem(DRAFT_KEY);
@@ -224,6 +267,7 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const [reference, setReference] = useState("");
   const [copied, setCopied] = useState(false);
+  const [sent, setSent] = useState(loadSent);
   const liveRegionRef = useRef(null);
   const fieldRefs = useRef({});
   const fileInputRef = useRef(null);
@@ -446,6 +490,16 @@ export default function App() {
     // Simulated send — swap for a real request when wiring up a backend.
     setTimeout(() => {
       const ticket = makeReference(values.topic);
+      const record = { reference: ticket, topic: values.topic, at: Date.now() };
+      const history = [record, ...loadSent()].slice(0, MAX_SENT);
+
+      setSent(history);
+
+      try {
+        localStorage.setItem(SENT_KEY, JSON.stringify(history));
+      } catch {
+        /* the reference is still on screen; it just will not be here later */
+      }
 
       setReference(ticket);
       setStatus("sent");
@@ -1033,6 +1087,66 @@ export default function App() {
           }
         }
 
+        /* ---------- Past references ---------- */
+        /* Closed by default and quiet: this is a filing cabinet, not part of
+           the task. It should be findable without ever competing with the
+           send button above it. */
+        .bc-history {
+          margin-top: 18px;
+          border-top: 1px solid var(--line);
+          padding-top: 14px;
+        }
+        .bc-history summary {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          color: var(--text-muted);
+          cursor: pointer;
+          list-style: none;
+        }
+        .bc-history summary::-webkit-details-marker { display: none; }
+        .bc-history summary:hover { color: var(--text); }
+        .bc-history-count {
+          display: inline-grid;
+          place-items: center;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 5px;
+          border-radius: 999px;
+          background: var(--accent-soft);
+          color: var(--accent);
+          font-size: 11px;
+          font-weight: 600;
+        }
+        .bc-history ul {
+          list-style: none;
+          margin: 12px 0 0;
+          padding: 0;
+          display: grid;
+          gap: 8px;
+        }
+        .bc-history li {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 12px;
+          font-size: 13px;
+        }
+        .bc-history code {
+          font-family: 'Space Grotesk', monospace;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+          color: var(--accent);
+          user-select: all;
+        }
+        .bc-history li span { color: var(--text-muted); font-size: 12px; }
+        .bc-history > p {
+          margin: 12px 0 0;
+          font-size: 12px;
+          color: var(--text-muted);
+        }
+
         .bc-again {
           background: transparent;
           border: 1px solid var(--line);
@@ -1376,6 +1490,35 @@ export default function App() {
                     "Send message"
                   )}
                 </button>
+
+                {/* Under the button rather than above the form: it is for
+                    the visit that comes back, not the one about to send. */}
+                {sent.length > 0 && (
+                  <details className="bc-history">
+                    <summary>
+                      Sent from this browser before
+                      <span className="bc-history-count">{sent.length}</span>
+                    </summary>
+
+                    <ul>
+                      {sent.map((item) => (
+                        <li key={item.reference}>
+                          <code>{item.reference}</code>
+                          <span>
+                            {findTopic(item.topic)?.label || "Something else"}
+                            {" · "}
+                            {sentWhen(item.at)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <p>
+                      Quote one of these and the desk can find the thread
+                      without you retelling it.
+                    </p>
+                  </details>
+                )}
               </>
             )}
             <div ref={liveRegionRef} aria-live="polite" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }} />

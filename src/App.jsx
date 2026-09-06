@@ -383,6 +383,36 @@ export default function App() {
     addFiles(e.dataTransfer.files);
   };
 
+  // A screenshot is almost always on the clipboard already — Print Screen, a
+  // snipping tool, an image copied out of a chat. Making someone save it to
+  // disk just so they can pick it back off disk is a step that only existed
+  // because nothing here was listening for a paste.
+  //
+  // The listener sits on the window rather than the drop zone: nobody aims
+  // at the drop zone before pressing Ctrl+V, and the cursor is usually still
+  // in the message box where they were describing the problem.
+  useEffect(() => {
+    if (status === "sent") return undefined;
+
+    const onPaste = (event) => {
+      const pasted = Array.from(event.clipboardData?.files || []);
+
+      // Pasted text belongs to whichever field has the cursor. Only files
+      // are ours to take, and taking them keeps the browser from dropping a
+      // filename into the textarea as well.
+      if (!pasted.length) return;
+
+      event.preventDefault();
+      addFiles(pasted);
+    };
+
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+    // `files` is in here because addFiles reads it to enforce the cap and to
+    // spot duplicates; a stale listener would let a fourth file through.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, status]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     const nextErrors = {
@@ -1267,7 +1297,7 @@ export default function App() {
                     </svg>
 
                     <p>
-                      Drop a screenshot here, or{" "}
+                      Drop a screenshot here, paste it, or{" "}
                       <button
                         type="button"
                         className="bc-browse"

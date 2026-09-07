@@ -266,7 +266,10 @@ export default function App() {
   const [fileError, setFileError] = useState("");
   const [dragging, setDragging] = useState(false);
   const [reference, setReference] = useState("");
-  const [copied, setCopied] = useState(false);
+  // Which reference was last copied, rather than a bare yes/no: the success
+  // screen is no longer the only place one can be copied from, and a shared
+  // boolean would light up "Copied" on every row at once.
+  const [copiedRef, setCopiedRef] = useState("");
   const [sent, setSent] = useState(loadSent);
   // Whether this visit opened onto someone else's half-written message —
   // their own from last time, or a colleague's on a shared machine. Read
@@ -308,22 +311,22 @@ export default function App() {
   // "Copied" is a confirmation, not a state worth keeping - it goes back to
   // an offer of the action a couple of seconds later.
   useEffect(() => {
-    if (!copied) return undefined;
+    if (!copiedRef) return undefined;
 
-    const timer = setTimeout(() => setCopied(false), 2000);
+    const timer = setTimeout(() => setCopiedRef(""), 2000);
     return () => clearTimeout(timer);
-  }, [copied]);
+  }, [copiedRef]);
 
   // The clipboard can be refused outright: an insecure context, a denied
   // permission, an older browser. The reference is on screen either way, so
   // that case points at it rather than reporting a failure.
-  const copyReference = async () => {
+  const copyReference = (value) => async () => {
     try {
-      await navigator.clipboard.writeText(reference);
-      setCopied(true);
+      await navigator.clipboard.writeText(value);
+      setCopiedRef(value);
 
       if (liveRegionRef.current) {
-        liveRegionRef.current.textContent = `Reference ${reference} copied.`;
+        liveRegionRef.current.textContent = `Reference ${value} copied.`;
       }
     } catch {
       if (liveRegionRef.current) {
@@ -540,7 +543,7 @@ export default function App() {
     setErrors({});
     setTouched({});
     setReference("");
-    setCopied(false);
+    setCopiedRef("");
     setStatus("idle");
   };
 
@@ -1197,6 +1200,26 @@ export default function App() {
           user-select: all;
         }
         .bc-history li span { color: var(--text-muted); font-size: 12px; }
+        /* Pushed to the end of the row rather than sharing the space
+           evenly: it is an action, not a third piece of the reference. */
+        .bc-history-copy {
+          margin-left: auto;
+          flex-shrink: 0;
+          border: none;
+          border-radius: 999px;
+          padding: 3px 10px;
+          background: var(--accent-soft);
+          color: var(--text);
+          font-size: 11.5px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+        .bc-history-copy:hover { background: var(--accent); color: #1a1204; }
+        .bc-history-copy:focus-visible {
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
+        }
         .bc-history > p {
           margin: 12px 0 0;
           font-size: 12px;
@@ -1328,9 +1351,9 @@ export default function App() {
                   <button
                     type="button"
                     className="bc-reference-copy"
-                    onClick={copyReference}
+                    onClick={copyReference(reference)}
                   >
-                    {copied ? "Copied" : "Copy"}
+                    {copiedRef === reference ? "Copied" : "Copy"}
                   </button>
                 </div>
 
@@ -1588,6 +1611,19 @@ export default function App() {
                             {" · "}
                             {sentWhen(item.at)}
                           </span>
+                          {/* The line under this list asks people to quote
+                              one of these. Reading six characters off the
+                              screen and retyping them into an email is
+                              exactly where the O/0 confusion the alphabet
+                              already avoids would have crept back in. */}
+                          <button
+                            type="button"
+                            className="bc-history-copy"
+                            onClick={copyReference(item.reference)}
+                            aria-label={`Copy reference ${item.reference}`}
+                          >
+                            {copiedRef === item.reference ? "Copied" : "Copy"}
+                          </button>
                         </li>
                       ))}
                     </ul>

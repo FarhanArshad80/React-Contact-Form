@@ -271,6 +271,11 @@ export default function App() {
   // boolean would light up "Copied" on every row at once.
   const [copiedRef, setCopiedRef] = useState("");
   const [sent, setSent] = useState(loadSent);
+  // The reference this message is chasing, when it is chasing one. A second
+  // message about the same problem is the most common reason anyone comes
+  // back to a contact form, and until now it arrived at the desk looking
+  // like a brand new report of a problem already half solved.
+  const [followingUp, setFollowingUp] = useState("");
   // Whether this visit opened onto someone else's half-written message —
   // their own from last time, or a colleague's on a shared machine. Read
   // from storage a second time rather than from `values`, so that typing the
@@ -502,7 +507,15 @@ export default function App() {
     // Simulated send — swap for a real request when wiring up a backend.
     setTimeout(() => {
       const ticket = makeReference(values.topic);
-      const record = { reference: ticket, topic: values.topic, at: Date.now() };
+      const record = {
+        reference: ticket,
+        topic: values.topic,
+        at: Date.now(),
+        // Kept so the history reads as a thread rather than as two unrelated
+        // messages about the same thing. Left off entirely when there is
+        // nothing being chased, so old records keep their shape.
+        ...(followingUp ? { about: followingUp } : {}),
+      };
       const history = [record, ...loadSent()].slice(0, MAX_SENT);
 
       setSent(history);
@@ -514,6 +527,7 @@ export default function App() {
       }
 
       setReference(ticket);
+      setFollowingUp("");
       setStatus("sent");
       clearDraft();
       if (liveRegionRef.current) {
@@ -544,7 +558,52 @@ export default function App() {
     setTouched({});
     setReference("");
     setCopiedRef("");
+    setFollowingUp("");
     setStatus("idle");
+  };
+
+  // Picks up an old thread. Only the topic and the reference move across —
+  // the name, the email and what was actually said were never stored, and
+  // this is not the moment to start: the whole point of keeping the history
+  // that thin is that it can sit on a shared machine.
+  const followUp = (item) => () => {
+    const label = findTopic(item.topic)?.label || "Something else";
+
+    // Only into an empty box. Someone who has already typed half a message is
+    // following up in their own words, and rewriting what they wrote to
+    // insert a reference would be worse than not mentioning it — the form
+    // says what is being chased either way.
+    const nextMessage = values.message || `Following up on ${item.reference}:\n\n`;
+
+    setFollowingUp(item.reference);
+    setValues((v) => ({
+      ...v,
+      // The desk this went to the first time is almost certainly the one
+      // that should see it again.
+      topic: findTopic(item.topic) ? item.topic : v.topic,
+      message: nextMessage,
+    }));
+    setTouched((t) => ({ ...t, topic: true }));
+    setErrors((er) => ({ ...er, topic: "" }));
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = `Following up on ${item.reference}, ${label}. Your message is ready to write.`;
+    }
+
+    // Straight to the box that still needs writing, with the caret after the
+    // quoted line rather than in front of it.
+    //
+    // After the paint, not before it: the box is a controlled field and still
+    // holds its old value at this point, so a caret placed now would be
+    // measured against text that is about to be replaced.
+    const box = fieldRefs.current.message;
+
+    if (box) {
+      requestAnimationFrame(() => {
+        box.focus();
+        box.setSelectionRange(nextMessage.length, nextMessage.length);
+      });
+    }
   };
 
   // Throwing the draft away leaves an empty form and no obvious next step,
@@ -1215,8 +1274,50 @@ export default function App() {
           cursor: pointer;
           transition: background 0.2s ease;
         }
+        /* Only the first action claims the free space. Two auto margins
+           would split it between them and leave the pair drifting apart
+           across the row instead of sitting together at the end. */
+        .bc-history-copy + .bc-history-copy { margin-left: 6px; }
         .bc-history-copy:hover { background: var(--accent); color: #1a1204; }
         .bc-history-copy:focus-visible {
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
+        }
+        /* Directly above the send button, where it is read as a condition of
+           sending rather than as a note about the form. */
+        .bc-following {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
+          margin: 0 0 12px;
+          padding: 10px 12px;
+          border: 1px solid var(--accent-soft);
+          border-radius: 10px;
+          background: var(--accent-soft);
+          font-size: 12.5px;
+          color: var(--text-muted);
+        }
+        .bc-following code {
+          font-family: 'Space Grotesk', monospace;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+          color: var(--accent);
+        }
+        /* A link rather than a button: undoing a choice should not look as
+           consequential as making one. */
+        .bc-following-clear {
+          margin-left: auto;
+          border: none;
+          background: none;
+          padding: 0;
+          color: var(--text-muted);
+          font-size: 12px;
+          text-decoration: underline;
+          cursor: pointer;
+        }
+        .bc-following-clear:hover { color: var(--text); }
+        .bc-following-clear:focus-visible {
           outline: 2px solid var(--accent);
           outline-offset: 2px;
         }
@@ -1582,6 +1683,22 @@ export default function App() {
                   )}
                 </div>
 
+                {/* Said on the form, not only in the message box, because
+                    the box can be rewritten from scratch and the link would
+                    go with it without anything on screen changing. */}
+                {followingUp && (
+                  <p className="bc-following">
+                    Following up on <code>{followingUp}</code>
+                    <button
+                      type="button"
+                      className="bc-following-clear"
+                      onClick={() => setFollowingUp("")}
+                    >
+                      Send as a new message instead
+                    </button>
+                  </p>
+                )}
+
                 <button type="submit" className="bc-submit" disabled={status === "sending"}>
                   {status === "sending" ? (
                     <>
@@ -1610,6 +1727,15 @@ export default function App() {
                             {findTopic(item.topic)?.label || "Something else"}
                             {" · "}
                             {sentWhen(item.at)}
+                            {/* Two messages about one problem read as one
+                                thread here, the same way they will at the
+                                desk. */}
+                            {item.about && (
+                              <>
+                                {" · follows "}
+                                <code>{item.about}</code>
+                              </>
+                            )}
                           </span>
                           {/* The line under this list asks people to quote
                               one of these. Reading six characters off the
@@ -1623,6 +1749,18 @@ export default function App() {
                             aria-label={`Copy reference ${item.reference}`}
                           >
                             {copiedRef === item.reference ? "Copied" : "Copy"}
+                          </button>
+                          {/* Copying the reference assumes the next move
+                              happens somewhere else — an email, a phone
+                              call. Most of the time the next move is another
+                              message through this same form. */}
+                          <button
+                            type="button"
+                            className="bc-history-copy"
+                            onClick={followUp(item)}
+                            aria-label={`Follow up on ${item.reference}`}
+                          >
+                            Follow up
                           </button>
                         </li>
                       ))}

@@ -444,6 +444,32 @@ export default function App() {
     addFiles(e.dataTransfer.files);
   };
 
+  // Missing the drop zone should cost nothing. A file let go anywhere else on
+  // the page is handled by the browser, which navigates to it — so a screen
+  // shot dropped an inch wide of the target replaces the form, and the
+  // half-written message with it.
+  //
+  // Both events have to be cancelled: without dragover saying it will handle
+  // the drop, drop is never delivered to the page at all and the browser
+  // takes it regardless.
+  useEffect(() => {
+    const swallow = (event) => {
+      // Only files. Dragging selected text within the page is somebody
+      // rearranging their own sentence, and that still has to work.
+      if (!Array.from(event.dataTransfer?.types || []).includes("Files")) return;
+
+      event.preventDefault();
+    };
+
+    window.addEventListener("dragover", swallow);
+    window.addEventListener("drop", swallow);
+
+    return () => {
+      window.removeEventListener("dragover", swallow);
+      window.removeEventListener("drop", swallow);
+    };
+  }, []);
+
   // A screenshot is almost always on the clipboard already — Print Screen, a
   // snipping tool, an image copied out of a chat. Making someone save it to
   // disk just so they can pick it back off disk is a step that only existed
@@ -1606,7 +1632,18 @@ export default function App() {
                       e.preventDefault();
                       setDragging(true);
                     }}
-                    onDragLeave={() => setDragging(false)}
+                    onDragLeave={(e) => {
+                      // dragleave also fires on the way *into* a child of
+                      // the zone — the icon, the sentence, the button — so
+                      // taken at face value the highlight switches itself
+                      // off halfway across its own drop target. A leave
+                      // whose destination is still inside the zone has not
+                      // left it. relatedTarget is null when the pointer
+                      // leaves the window altogether, which really is a
+                      // leave and falls through.
+                      if (e.currentTarget.contains(e.relatedTarget)) return;
+                      setDragging(false);
+                    }}
                     onDrop={handleDrop}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">

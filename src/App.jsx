@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 
 /**
  * Contact page — "Beacon" concept.
@@ -64,7 +64,7 @@ const TOPICS = [
     id: "support",
     label: "Support",
     desk: "our support team",
-    reply: "5 minutes",
+    replyMinutes: 5,
     prompt: "What went wrong, and what were you doing when it happened?",
     hint: "Any error message and the page you were on save us a round trip.",
   },
@@ -72,7 +72,7 @@ const TOPICS = [
     id: "sales",
     label: "Sales",
     desk: "our sales team",
-    reply: "1 hour",
+    replyMinutes: 60,
     prompt: "What are you trying to do, and how big is the team?",
     hint: "Team size and rough timeline let us quote properly the first time.",
   },
@@ -80,7 +80,9 @@ const TOPICS = [
     id: "feedback",
     label: "Feedback",
     desk: "our product team",
-    reply: "1 business day",
+    // A business day is the desk's day, not twenty-four hours: nine to six
+    // is nine hours, and counting the night would promise an answer at 3am.
+    replyMinutes: 9 * 60,
     prompt: "What would you change, and what made you want it changed?",
     hint: "The moment that prompted this is worth more to us than the fix you have in mind.",
   },
@@ -88,7 +90,7 @@ const TOPICS = [
     id: "other",
     label: "Something else",
     desk: "our team",
-    reply: "1 business day",
+    replyMinutes: 9 * 60,
     prompt: "What can we help with?",
     hint: "",
   },
@@ -96,7 +98,10 @@ const TOPICS = [
 
 const DEFAULT_PROMPT = "What can we help with?";
 
-const DEFAULT_REPLY = "5 minutes";
+// How long a desk with no stated wait is given. Held as minutes only: the
+// wait used to be written twice, once as a number and once as the sentence
+// shown on screen, which is the arrangement where the two drift apart.
+const DEFAULT_REPLY_MINUTES = 5;
 
 // A reference gives the sender something to quote when they follow up, and
 // it is the first thing a desk asks for. The prefix says which queue it
@@ -148,6 +153,7 @@ function deskClock(now) {
     timeZone: DESK_TIMEZONE,
     weekday: "short",
     hour: "numeric",
+    minute: "2-digit",
     hourCycle: "h23",
   }).formatToParts(now);
 
@@ -156,7 +162,82 @@ function deskClock(now) {
   return {
     day: DAY_INDEX[read("weekday")] ?? 1,
     hour: Number(read("hour")),
+    minute: Number(read("minute")) || 0,
   };
+}
+
+function clockText(hour, minute) {
+  const suffix = hour < 12 ? "am" : "pm";
+
+  return `${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${suffix}`;
+}
+
+const OPEN_MINUTE = OPEN_HOUR * 60;
+const CLOSE_MINUTE = CLOSE_HOUR * 60;
+
+// When an answer should actually be expected, counted in the desk's working
+// hours rather than in wall-clock time.
+//
+// "Usually replies within 5 minutes" is true and nearly useless at two
+// minutes to six, when those five minutes are on the other side of a night.
+// The same sentence out of hours says nothing at all: five minutes from
+// when? So the wait is walked through the hours the desk actually keeps -
+// starting at the next moment it is open, and carrying whatever is left over
+// closing time into the following working day.
+export function replyBy(now, minutes, clock = deskClock) {
+  const { day, hour, minute } = clock(now);
+
+  let dayIndex = day;
+  let daysAhead = 0;
+  let atMinute = hour * 60 + minute;
+
+  // Step to the next moment the desk is open. A day at a time, since a
+  // weekend is two of them and a Friday evening is three.
+  const openNextDay = () => {
+    dayIndex = (dayIndex + 1) % 7;
+    daysAhead += 1;
+    atMinute = OPEN_MINUTE;
+  };
+
+  if (!WORKING_DAYS.includes(dayIndex) || atMinute >= CLOSE_MINUTE) {
+    openNextDay();
+  } else if (atMinute < OPEN_MINUTE) {
+    atMinute = OPEN_MINUTE;
+  }
+
+  while (!WORKING_DAYS.includes(dayIndex)) openNextDay();
+
+  // Spend the wait. Anything past closing time is not lost, it is owed by
+  // the next working day - which is what makes a five-minute promise made at
+  // 17:58 come out as 09:03 tomorrow rather than 18:03 tonight.
+  let left = Math.max(0, minutes);
+
+  while (left > CLOSE_MINUTE - atMinute) {
+    left -= CLOSE_MINUTE - atMinute;
+    openNextDay();
+    while (!WORKING_DAYS.includes(dayIndex)) openNextDay();
+  }
+
+  atMinute += left;
+
+  return {
+    day: dayIndex,
+    daysAhead,
+    hour: Math.floor(atMinute / 60),
+    minute: atMinute % 60,
+  };
+}
+
+// "by 3:20 pm ET", with the day named only when it is not this one - the
+// common case is an answer within the hour, and "today" on every message
+// would be noise.
+export function replyByText(estimate) {
+  const time = `${clockText(estimate.hour, estimate.minute)} ${DESK_TIMEZONE_LABEL}`;
+
+  if (estimate.daysAhead === 0) return `by ${time}`;
+  if (estimate.daysAhead === 1) return `by ${time} tomorrow`;
+
+  return `by ${DAY_NAMES[estimate.day]} ${time}`;
 }
 
 function openingTimeText() {
@@ -276,6 +357,11 @@ export default function App() {
   // back to a contact form, and until now it arrived at the desk looking
   // like a brand new report of a problem already half solved.
   const [followingUp, setFollowingUp] = useState("");
+  // Frozen when the message goes. The estimate on the form moves with the
+  // clock, as it should; the one on the confirmation is a promise that was
+  // made at a particular moment and should not quietly slide while somebody
+  // is reading it.
+  const [sentReplyBy, setSentReplyBy] = useState("");
   // Whether this visit opened onto someone else's half-written message —
   // their own from last time, or a colleague's on a shared machine. Read
   // from storage a second time rather than from `values`, so that typing the
@@ -554,6 +640,9 @@ export default function App() {
 
       setReference(ticket);
       setFollowingUp("");
+      setSentReplyBy(
+        replyByText(replyBy(new Date(), findTopic(values.topic)?.replyMinutes ?? DEFAULT_REPLY_MINUTES))
+      );
       setStatus("sent");
       clearDraft();
       if (liveRegionRef.current) {
@@ -563,6 +652,12 @@ export default function App() {
   };
 
   const selectedTopic = findTopic(values.topic);
+  // Recomputed with the desk status, which re-reads the clock every minute,
+  // so the estimate ages with the page rather than with the tab.
+  const replyEstimate = useMemo(
+    () => replyByText(replyBy(new Date(), selectedTopic?.replyMinutes ?? DEFAULT_REPLY_MINUTES)),
+    [desk, selectedTopic]
+  );
   const remaining = MESSAGE_MAX - values.message.length;
   const counterState =
     remaining < 0 ? "bc-counter-over" : remaining <= 60 ? "bc-counter-warn" : "";
@@ -1429,9 +1524,12 @@ export default function App() {
               className={`bc-eyebrow-dot ${desk.open ? "" : "bc-eyebrow-dot-off"}`}
               aria-hidden="true"
             />
+            {/* A time rather than a duration. "Within 5 minutes" is true and
+                nearly useless at two minutes to six, and out of hours it
+                does not even say five minutes from when. */}
             {desk.open
-              ? `Open now — usually replies within ${selectedTopic?.reply || DEFAULT_REPLY}`
-              : `Closed — the desk is back ${desk.returns}`}
+              ? `Open now — expect a reply ${replyEstimate}`
+              : `Closed — the desk is back ${desk.returns}, expect a reply ${replyEstimate}`}
           </div>
 
           <h1 className="bc-h1">
@@ -1469,8 +1567,8 @@ export default function App() {
                 <p>
                   Thanks, {values.name.split(" ")[0] || "there"} —{" "}
                   {selectedTopic?.desk || "our team"} will get back to you at{" "}
-                  {values.email}
-                  {desk.open ? "." : `, once the desk opens ${desk.returns}.`}
+                  {values.email} — expect a reply {sentReplyBy}.
+                  {desk.open ? "" : ` The desk is back ${desk.returns}.`}
                 </p>
                 <div className="bc-reference">
                   <span className="bc-reference-label">Your reference</span>

@@ -128,6 +128,57 @@ function makeReference(topicId) {
   return `${prefix}-${body}`;
 }
 
+// A copy of what was sent, for the sender to keep.
+//
+// This form stores none of it. The name, the email and the message are never
+// written to this browser, which is what makes the history safe to leave on a
+// shared machine — and it also means that pressing "send another message"
+// takes the only copy of what you just wrote with it.
+//
+// Handing the text over rather than keeping it resolves both: the sender
+// leaves with a record, and the site still holds nothing.
+export function messageCopy({ reference, topic, values, files, replyBy, about, sentAt }) {
+  const lines = [
+    "Beacon — message sent",
+    `Reference: ${reference}`,
+    `Topic: ${topic?.label || "Something else"}`,
+    `Sent: ${sentAt.toLocaleString()}`,
+  ];
+
+  if (replyBy) lines.push(`Reply expected: ${replyBy}`);
+  // Only on a message that is chasing something, because on every other one
+  // the line would be an empty field asking to be filled in.
+  if (about) lines.push(`Following up on: ${about}`);
+
+  lines.push("", `From: ${values.name} <${values.email}>`);
+
+  if (files.length > 0) {
+    lines.push(`Attached: ${files.map((item) => item.file.name).join(", ")}`);
+  }
+
+  // The attachments themselves are not in here — a text file cannot hold
+  // them, and the sender already has the originals on the machine they
+  // picked them from.
+  lines.push("", "—".repeat(32), "", values.message);
+
+  return lines.join("\n");
+}
+
+function downloadText(text, filename) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  link.click();
+
+  // Handed back on the next task rather than immediately: the save is
+  // started by the click but not necessarily finished when it returns, and
+  // revoking the URL underneath it cancels the download.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 // The desk keeps its own hours, and they are the desk's — not the
 // visitor's. Reading the clock in this timezone is what keeps "back at
 // 9:00" true for someone writing in at 3am from another continent.
@@ -362,6 +413,12 @@ export default function App() {
   // made at a particular moment and should not quietly slide while somebody
   // is reading it.
   const [sentReplyBy, setSentReplyBy] = useState("");
+  // What the confirmation is a confirmation of: the moment it went, and the
+  // thread it was chasing. Both are cleared from the form the instant it
+  // sends, and the copy offered on this screen has to describe the message
+  // that was actually sent rather than the empty form behind it.
+  const [sentAt, setSentAt] = useState(null);
+  const [sentAbout, setSentAbout] = useState("");
   // Whether this visit opened onto someone else's half-written message —
   // their own from last time, or a colleague's on a shared machine. Read
   // from storage a second time rather than from `values`, so that typing the
@@ -639,6 +696,8 @@ export default function App() {
       }
 
       setReference(ticket);
+      setSentAt(new Date());
+      setSentAbout(followingUp);
       setFollowingUp("");
       setSentReplyBy(
         replyByText(replyBy(new Date(), findTopic(values.topic)?.replyMinutes ?? DEFAULT_REPLY_MINUTES))
@@ -680,7 +739,28 @@ export default function App() {
     setReference("");
     setCopiedRef("");
     setFollowingUp("");
+    setSentAt(null);
+    setSentAbout("");
     setStatus("idle");
+  };
+
+  const saveCopy = () => {
+    downloadText(
+      messageCopy({
+        reference,
+        topic: selectedTopic,
+        values,
+        files,
+        replyBy: sentReplyBy,
+        about: sentAbout,
+        sentAt: sentAt || new Date(),
+      }),
+      `beacon-${reference}.txt`
+    );
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = `A copy of your message has been saved as beacon-${reference}.txt.`;
+    }
   };
 
   // Picks up an old thread. Only the topic and the reference move across —
@@ -1448,6 +1528,21 @@ export default function App() {
           color: var(--text-muted);
         }
 
+        .bc-success-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        /* The reason there is a button to press at all. Said quietly, under
+           it, where it explains rather than sells. */
+        .bc-success-note {
+          margin: 14px 0 0;
+          font-size: 12px;
+          line-height: 1.5;
+          color: var(--text-muted);
+        }
+
         .bc-again {
           background: transparent;
           border: 1px solid var(--line);
@@ -1589,7 +1684,24 @@ export default function App() {
                       : `${files.length} attachments went with it.`}
                   </p>
                 )}
-                <button type="button" className="bc-again" onClick={resetForm}>Send another message</button>
+                {/* Before "send another message", which is the button that
+                    throws the text away. Offered rather than done
+                    automatically: most people do not need a file, and a
+                    download nobody asked for is its own small rudeness. */}
+                <div className="bc-success-actions">
+                  <button type="button" className="bc-again" onClick={saveCopy}>
+                    Save a copy
+                  </button>
+                  <button type="button" className="bc-again" onClick={resetForm}>
+                    Send another message
+                  </button>
+                </div>
+
+                <p className="bc-success-note">
+                  We keep your reference and nothing else — not your name,
+                  your address or a word of what you wrote. The copy is yours
+                  to keep.
+                </p>
               </div>
             ) : (
               <>

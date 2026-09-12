@@ -53,6 +53,125 @@ function fileProblem(file) {
   return "";
 }
 
+// A mistyped address is the one mistake on this form that cannot be
+// recovered from. Everything else either fails loudly - an empty field, a
+// file too large - or costs the desk a round trip. A reply sent to
+// jordan@gmial.com simply never arrives, and the sender is left believing
+// they were ignored.
+//
+// So the domains people actually use, and the ones they land on by accident
+// while typing them.
+const KNOWN_DOMAINS = [
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "hotmail.com",
+  "hotmail.co.uk", "outlook.com", "outlook.co.uk", "live.com", "icloud.com",
+  "me.com", "aol.com", "proton.me", "protonmail.com", "msn.com", "mail.com",
+  "gmx.com", "zoho.com", "yandex.com", "comcast.net", "qq.com",
+];
+
+// Typos in the last label are worth catching on any domain, not just the
+// popular ones: "acme-industrial.con" is as undeliverable as "gmial.com" and
+// no list of providers will ever contain it. Only misspellings that are not
+// themselves real suffixes go in here — .co and .cm are both somebody's
+// country, and correcting them would break addresses that were right.
+const TLD_TYPOS = {
+  con: "com", cmo: "com", comm: "com", ocm: "com", clm: "com", cpm: "com",
+  xom: "com", vom: "com", con1: "com", nte: "net", nett: "net", ner: "net",
+  orgg: "org", ogr: "org", rog: "org", eud: "edu",
+};
+
+// How many single-character slips turn one string into the other, giving up
+// as soon as the answer is past `limit` — the callers only care about "close
+// enough to be a slip", and the full table is wasted work on two strings
+// that share nothing.
+//
+// Swapping two neighbours counts as one slip, not two. Plain Levenshtein
+// scores "gmial" two edits from "gmail" and would need the limit doubled to
+// catch it — which would also let through every domain genuinely two letters
+// away from a provider. Transposition is the most common typing mistake
+// there is, and it deserves to be counted as the single mistake it is.
+function editDistance(a, b, limit) {
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+
+  let beforePrevious = [];
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let best = i;
+
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + cost
+      );
+
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        current[j] = Math.min(current[j], beforePrevious[j - 2] + 1);
+      }
+
+      best = Math.min(best, current[j]);
+    }
+
+    // Every remaining row can only add to the best score on this one, so a
+    // row already past the limit settles it.
+    if (best > limit) return limit + 1;
+
+    beforePrevious = previous;
+    previous = current;
+  }
+
+  return previous[b.length];
+}
+
+// The address the sender probably meant, or "" if this one looks fine.
+//
+// Silence is the default and the important case: this runs on every address
+// anyone types, and a form that second-guesses a correct one is worse than a
+// form that says nothing. So a domain that is already known is left alone,
+// and so is anything more than a slip away from one — two edits from
+// gmail.com is as likely to be a small company nobody here has heard of.
+export function suggestEmail(email) {
+  const address = String(email || "").trim();
+  const at = address.lastIndexOf("@");
+
+  if (at < 1) return "";
+
+  const local = address.slice(0, at);
+  const domain = address.slice(at + 1).toLowerCase();
+
+  if (!domain || KNOWN_DOMAINS.includes(domain)) return "";
+
+  const labels = domain.split(".");
+  const tld = labels[labels.length - 1];
+
+  // The last label first, because it is the one mistake that can happen to
+  // a domain nobody could have listed.
+  if (labels.length > 1 && TLD_TYPOS[tld]) {
+    return `${local}@${labels.slice(0, -1).join(".")}.${TLD_TYPOS[tld]}`;
+  }
+
+  // Then the provider itself. Distance is allowed to grow with the name so
+  // that "gmial" is caught without "aol.com" swallowing every four-letter
+  // domain that happens to rhyme with it.
+  const limit = domain.length > 10 ? 2 : 1;
+  let best = "";
+  let bestDistance = limit + 1;
+
+  for (const known of KNOWN_DOMAINS) {
+    const distance = editDistance(domain, known, limit);
+
+    if (distance > 0 && distance < bestDistance) {
+      best = known;
+      bestDistance = distance;
+    }
+  }
+
+  return best ? `${local}@${best}` : "";
+}
+
 // Everything lands in the same inbox today, but saying which desk picks it up
 // — and how quickly — sets a truthful expectation before anyone hits send.
 // Each desk opens with the same question, and it is always the one the
@@ -419,6 +538,10 @@ export default function App() {
   // that was actually sent rather than the empty form behind it.
   const [sentAt, setSentAt] = useState(null);
   const [sentAbout, setSentAbout] = useState("");
+  // A suggested address the sender has waved away. Held as the suggestion
+  // itself rather than as a flag, so that correcting one typo into a
+  // different one asks again instead of staying quiet about the second.
+  const [keptEmail, setKeptEmail] = useState("");
   // Whether this visit opened onto someone else's half-written message —
   // their own from last time, or a colleague's on a shared machine. Read
   // from storage a second time rather than from `values`, so that typing the
@@ -717,6 +840,33 @@ export default function App() {
     () => replyByText(replyBy(new Date(), selectedTopic?.replyMinutes ?? DEFAULT_REPLY_MINUTES)),
     [desk, selectedTopic]
   );
+  // Only once they have left the field. Every address is a typo halfway
+  // through being typed, and a form that corrects mid-word is arguing with
+  // somebody who has not finished talking. Only on an otherwise valid one,
+  // too — "enter a valid email address" is already the more useful thing to
+  // say about `jordan@`.
+  const emailSuggestion = useMemo(() => {
+    if (!touched.email || errors.email) return "";
+
+    const guess = suggestEmail(values.email);
+
+    return guess && guess !== keptEmail ? guess : "";
+  }, [values.email, touched.email, errors.email, keptEmail]);
+
+  const acceptEmailSuggestion = () => {
+    setValues((v) => ({ ...v, email: emailSuggestion }));
+    setErrors((er) => ({ ...er, email: validate("email", emailSuggestion) }));
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = `Email changed to ${emailSuggestion}.`;
+    }
+  };
+
+  // Some people really are at a domain one letter from a famous one, and
+  // being asked about it twice on the same form is worse than being asked
+  // nothing.
+  const keepEmail = () => setKeptEmail(emailSuggestion);
+
   const remaining = MESSAGE_MAX - values.message.length;
   const counterState =
     remaining < 0 ? "bc-counter-over" : remaining <= 60 ? "bc-counter-warn" : "";
@@ -736,6 +886,7 @@ export default function App() {
     setValues(EMPTY_VALUES);
     setErrors({});
     setTouched({});
+    setKeptEmail("");
     setReference("");
     setCopiedRef("");
     setFollowingUp("");
@@ -1130,6 +1281,43 @@ export default function App() {
         }
         .bc-counter.bc-counter-warn { color: var(--accent); }
         .bc-counter.bc-counter-over { color: var(--danger); }
+
+        /* A question, not a failure — so it borrows the beacon amber rather
+           than the red the real errors use. Getting this wrong would make a
+           correct address look rejected. */
+        .bc-suggest {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-top: 6px;
+          font-size: 12.5px;
+          color: var(--accent);
+        }
+        .bc-suggest-fix {
+          background: var(--accent-soft);
+          border: 1px solid transparent;
+          border-radius: 5px;
+          padding: 1px 6px;
+          color: var(--accent);
+          font: inherit;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .bc-suggest-fix:hover,
+        .bc-suggest-fix:focus-visible { border-color: var(--accent); }
+        .bc-suggest-keep {
+          background: none;
+          border: 0;
+          padding: 0;
+          color: var(--text-muted);
+          font: inherit;
+          text-decoration: underline;
+          cursor: pointer;
+        }
+        .bc-suggest-keep:hover,
+        .bc-suggest-keep:focus-visible { color: var(--text); }
 
         .bc-error-msg {
           color: var(--danger);
@@ -1791,6 +1979,28 @@ export default function App() {
                   />
                   {errors.email && touched.email && (
                     <div className="bc-error-msg" id="bc-email-error">{errors.email}</div>
+                  )}
+                  {emailSuggestion && (
+                    <div className="bc-suggest" role="status">
+                      <span>
+                        Did you mean{" "}
+                        <button
+                          type="button"
+                          className="bc-suggest-fix"
+                          onClick={acceptEmailSuggestion}
+                        >
+                          {emailSuggestion}
+                        </button>
+                        ?
+                      </span>
+                      <button
+                        type="button"
+                        className="bc-suggest-keep"
+                        onClick={keepEmail}
+                      >
+                        Mine is right
+                      </button>
+                    </div>
                   )}
                 </div>
 

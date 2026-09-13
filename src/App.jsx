@@ -24,6 +24,13 @@ const SENT_KEY = "beacon.contact-sent";
 const MAX_SENT = 5;
 const EMPTY_VALUES = { topic: "", name: "", email: "", message: "" };
 
+// Named the way the keyboard in front of the sender names it. Read once:
+// the platform does not change while the page is open.
+const SEND_SHORTCUT =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "")
+    ? "⌘ Enter"
+    : "Ctrl Enter";
+
 // Attachments. A screenshot answers "what does the error look like" faster
 // than any three paragraphs, so the form takes images and PDFs — capped
 // because a support desk inbox is not a file host.
@@ -1302,6 +1309,12 @@ export default function App() {
           transition: color 0.2s ease;
         }
         .bc-counter.bc-counter-warn { color: var(--accent); }
+        .bc-shortcut {
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 12px;
+          color: var(--text-muted);
+          opacity: 0.7;
+        }
         .bc-counter.bc-counter-over { color: var(--danger); }
 
         /* A question, not a failure — so it borrows the beacon amber rather
@@ -2038,6 +2051,23 @@ export default function App() {
                     value={values.message}
                     onChange={handleChange("message")}
                     onBlur={handleBlur("message")}
+                    // The message box is where a message is finished, and
+                    // reaching the send button from it meant tabbing through
+                    // the attachment controls first. Ctrl/⌘ + Enter is the
+                    // send shortcut every mail client already taught — plain
+                    // Enter stays a new line, because paragraphs are the
+                    // point of this box.
+                    //
+                    // Through requestSubmit rather than calling the handler,
+                    // so a send from the keyboard is validated and announced
+                    // exactly as a click on the button would be.
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey)) return;
+
+                      event.preventDefault();
+                      if (status !== "idle") return;
+                      event.currentTarget.form?.requestSubmit();
+                    }}
                     aria-invalid={!!(errors.message && touched.message)}
                     aria-describedby={
                       [
@@ -2052,6 +2082,14 @@ export default function App() {
                   <div className="bc-field-foot">
                     {errors.message && touched.message && (
                       <div className="bc-error-msg" id="bc-message-error">{errors.message}</div>
+                    )}
+                    {/* Out of the way of an error, which is the more useful
+                        thing to read in the same spot. Hidden from screen
+                        readers: it describes a key, not the field. */}
+                    {!(errors.message && touched.message) && values.message.trim() && (
+                      <span className="bc-shortcut" aria-hidden="true">
+                        {SEND_SHORTCUT} to send
+                      </span>
                     )}
                     <span
                       className={`bc-counter ${counterState}`}

@@ -736,6 +736,28 @@ export default function App() {
     };
   }, []);
 
+  // The draft survives a reload; the attachments do not. Text can be written
+  // to storage, but a File is a handle to something on this machine and does
+  // not outlive the page that was given it — so a reload restores every word
+  // of the message and quietly drops the three screenshots that explained it.
+  //
+  // Only while files are actually attached and unsent. Asking on every
+  // departure would be a form arguing with somebody closing a tab they had
+  // finished with, and the browser's own wording is all that can be shown —
+  // the prompt exists to stop the click, not to explain it.
+  useEffect(() => {
+    if (status === "sent" || files.length === 0) return undefined;
+
+    const onLeave = (event) => {
+      event.preventDefault();
+      // Older browsers still need a value here before they will ask.
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", onLeave);
+    return () => window.removeEventListener("beforeunload", onLeave);
+  }, [files.length, status]);
+
   // A screenshot is almost always on the clipboard already — Print Screen, a
   // snipping tool, an image copied out of a chat. Making someone save it to
   // disk just so they can pick it back off disk is a step that only existed

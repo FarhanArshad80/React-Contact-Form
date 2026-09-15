@@ -224,6 +224,98 @@ const TOPICS = [
 
 const DEFAULT_PROMPT = "What can we help with?";
 
+// The words that say which desk a message actually belongs to.
+//
+// Picking the topic is the first thing this form asks and the last thing
+// anyone thinks about: the button at the top gets pressed before the message
+// underneath it has been written, and by the end the message is often about
+// something else entirely. A pricing question filed under Support waits in
+// the wrong queue, gets forwarded, and the five-minute promise made at the
+// top of the page quietly becomes tomorrow.
+//
+// Nobody is being told they are wrong. This is the same offer the email
+// field already makes: here is what it looks like from here, take it or
+// leave it.
+//
+// Phrases as well as single words, because "log in" and "purchase order"
+// each say more than either half of them does.
+const TOPIC_WORDS = {
+  support: [
+    "error", "errors", "broken", "bug", "bugs", "crash", "crashes", "crashed",
+    "not working", "doesn't work", "does not work", "stopped working", "failing",
+    "failed", "stuck", "log in", "login", "sign in", "password", "reset",
+    "timeout", "500", "404", "unable to", "can't access", "cannot access",
+  ],
+  sales: [
+    "price", "prices", "pricing", "quote", "cost", "costs", "invoice", "billing",
+    "billed", "plan", "plans", "upgrade", "downgrade", "seats", "licence",
+    "license", "trial", "enterprise", "contract", "renewal", "discount",
+    "purchase order", "demo", "subscription", "per month", "per user",
+  ],
+  feedback: [
+    "suggestion", "suggest", "feature request", "would be nice", "would be great",
+    "wish", "idea", "ideas", "improve", "improvement", "roadmap", "feedback",
+    "it would help if", "please add", "why can't i", "why cannot i",
+  ],
+};
+
+// Whole words only, so "plan" does not match "explanation" and "500" does not
+// match "1500". Built once — these lists do not change while the page is
+// open, and rebuilding a few dozen regexes on every keystroke would be work
+// done for nothing.
+const TOPIC_PATTERNS = Object.entries(TOPIC_WORDS).map(([id, words]) => [
+  id,
+  words.map((word) => new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i")),
+]);
+
+// How many distinct signals it takes before the form says anything. One is a
+// coincidence — "there is a bug in your pricing page" is a support message
+// that says "pricing" — and a form that second-guesses on one word is a form
+// people learn to ignore.
+const TOPIC_CONFIDENCE = 2;
+
+// The desk this message reads like it is for, or "" if the one already
+// picked is as good an answer as any.
+//
+// Silence is the default and the important case. A suggestion only appears
+// when another desk beats the chosen one outright and clears the bar above
+// it — a message that mentions both is exactly the message nobody should be
+// second-guessed on.
+export function suggestTopic(message, chosenId) {
+  const text = String(message || "");
+
+  if (text.trim().length < 20) return "";
+
+  const scores = {};
+
+  for (const [id, patterns] of TOPIC_PATTERNS) {
+    scores[id] = patterns.reduce(
+      (count, pattern) => count + (pattern.test(text) ? 1 : 0),
+      0
+    );
+  }
+
+  let best = "";
+
+  for (const [id, score] of Object.entries(scores)) {
+    if (score >= TOPIC_CONFIDENCE && score > (scores[best] || 0)) best = id;
+  }
+
+  if (!best || best === chosenId) return "";
+
+  // A clear winner, not a photo finish. Two desks on the same score is the
+  // message that genuinely spans both, and the sender is the one who knows
+  // which half matters.
+  const runnerUp = Object.entries(scores)
+    .filter(([id]) => id !== best)
+    .reduce((top, [, score]) => Math.max(top, score), 0);
+
+  if (scores[best] === runnerUp) return "";
+
+  // And it has to beat the desk already chosen, not merely differ from it.
+  return scores[best] > (scores[chosenId] || 0) ? best : "";
+}
+
 // How long a desk with no stated wait is given. Held as minutes only: the
 // wait used to be written twice, once as a number and once as the sentence
 // shown on screen, which is the arrangement where the two drift apart.
@@ -549,6 +641,10 @@ export default function App() {
   // itself rather than as a flag, so that correcting one typo into a
   // different one asks again instead of staying quiet about the second.
   const [keptEmail, setKeptEmail] = useState("");
+  // The desk the sender has already declined to be moved off. Same reasoning
+  // as keptEmail: some messages really do belong where they were filed, and
+  // being asked twice about the same one is worse than not being asked.
+  const [keptTopic, setKeptTopic] = useState("");
   // Whether this visit opened onto someone else's half-written message —
   // their own from last time, or a colleague's on a shared machine. Read
   // from storage a second time rather than from `values`, so that typing the
@@ -896,6 +992,32 @@ export default function App() {
   // nothing.
   const keepEmail = () => setKeptEmail(emailSuggestion);
 
+  // Which desk the message reads like it is for, when that is not the one
+  // already picked. Only once a topic has been chosen: before that the form
+  // is still asking the question outright, and answering it over the top of
+  // itself would be two controls arguing.
+  const topicSuggestion = useMemo(() => {
+    if (!values.topic) return "";
+
+    const guess = suggestTopic(values.message, values.topic);
+
+    return guess && guess !== keptTopic ? guess : "";
+  }, [values.message, values.topic, keptTopic]);
+
+  const suggestedTopic = findTopic(topicSuggestion);
+
+  const acceptTopicSuggestion = () => {
+    setValues((v) => ({ ...v, topic: topicSuggestion }));
+    setErrors((er) => ({ ...er, topic: "" }));
+    setKeptTopic("");
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = `Topic changed to ${suggestedTopic?.label || ""}.`;
+    }
+  };
+
+  const keepTopic = () => setKeptTopic(topicSuggestion);
+
   const remaining = MESSAGE_MAX - values.message.length;
   const counterState =
     remaining < 0 ? "bc-counter-over" : remaining <= 60 ? "bc-counter-warn" : "";
@@ -916,6 +1038,7 @@ export default function App() {
     setErrors({});
     setTouched({});
     setKeptEmail("");
+    setKeptTopic("");
     setReference("");
     setCopiedRef("");
     setFollowingUp("");
@@ -2079,6 +2202,33 @@ export default function App() {
                         .join(" ")
                     }
                   />
+                  {/* Under the message rather than up beside the topic
+                      buttons. This is read off what has just been typed, and
+                      the row it refers to is several fields up the page —
+                      offering it there would put the answer somewhere the
+                      sender has already scrolled past. */}
+                  {suggestedTopic && (
+                    <div className="bc-suggest" role="status">
+                      <span>
+                        This reads like one for {suggestedTopic.desk}.{" "}
+                        <button
+                          type="button"
+                          className="bc-suggest-fix"
+                          onClick={acceptTopicSuggestion}
+                        >
+                          Send to {suggestedTopic.label}
+                        </button>
+                      </span>
+                      <button
+                        type="button"
+                        className="bc-suggest-keep"
+                        onClick={keepTopic}
+                      >
+                        Keep {selectedTopic?.label || "as is"}
+                      </button>
+                    </div>
+                  )}
+
                   <div className="bc-field-foot">
                     {errors.message && touched.message && (
                       <div className="bc-error-msg" id="bc-message-error">{errors.message}</div>

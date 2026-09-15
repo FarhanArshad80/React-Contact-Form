@@ -321,6 +321,38 @@ export function suggestTopic(message, chosenId) {
 // shown on screen, which is the arrangement where the two drift apart.
 const DEFAULT_REPLY_MINUTES = 5;
 
+// A message that says it brought something with it.
+//
+// The attachment field is below the message box and optional, which is a
+// reliable way of being written about and then not used: somebody types
+// "screenshot attached", finishes the sentence, and sends. What arrives at
+// the desk is a message referring to a picture that is not there, and the
+// only way to resolve it is a round trip asking for the thing the sender
+// already believed they had sent.
+//
+// Written as the promise rather than the noun. "Screenshot" on its own is
+// how most support messages start — "the screenshot page is broken" — while
+// "attached", "enclosed" and "below" are somebody telling you where to look.
+const ATTACHMENT_PROMISES = [
+  /\battach(ed|ing)\b/i,
+  // The bare noun is the ambiguous one: "attachment support would be a nice
+  // feature" is a message about this field, not a message using it. An
+  // article in front of it is what turns it into a particular attachment
+  // somebody believes they sent.
+  /\b(the|my|this|an|one)\s+attachments?\b/i,
+  /\benclos(ed|ing)\b/i,
+  /\bsee\s+(the\s+)?(screenshot|image|photo|picture|file|pdf|log)/i,
+  /\b(screenshot|image|photo|picture|file|pdf|log)s?\s+(is\s+|are\s+)?below\b/i,
+  /\bhere('s| is)\s+(a|the)\s+(screenshot|image|photo|picture|file|pdf|log)/i,
+  /\bi('ve| have)\s+(sent|included)\b/i,
+];
+
+export function mentionsAttachment(message) {
+  const text = String(message || "");
+
+  return ATTACHMENT_PROMISES.some((pattern) => pattern.test(text));
+}
+
 // A reference gives the sender something to quote when they follow up, and
 // it is the first thing a desk asks for. The prefix says which queue it
 // belongs to; the body is random rather than sequential so it does not
@@ -645,6 +677,10 @@ export default function App() {
   // as keptEmail: some messages really do belong where they were filed, and
   // being asked twice about the same one is worse than not being asked.
   const [keptTopic, setKeptTopic] = useState("");
+  // Set once the sender has said the missing attachment is not missing.
+  // Plenty of messages mention a file that was sent somewhere else, or last
+  // week, and the note should not survive being answered.
+  const [keptUnattached, setKeptUnattached] = useState(false);
   // Whether this visit opened onto someone else's half-written message —
   // their own from last time, or a colleague's on a shared machine. Read
   // from storage a second time rather than from `values`, so that typing the
@@ -1018,6 +1054,12 @@ export default function App() {
 
   const keepTopic = () => setKeptTopic(topicSuggestion);
 
+  // A message that promises a file, with no file on it. Recomputed as both
+  // halves change, so attaching the screenshot puts the note away without
+  // anyone having to dismiss it.
+  const missingAttachment =
+    !keptUnattached && files.length === 0 && mentionsAttachment(values.message);
+
   const remaining = MESSAGE_MAX - values.message.length;
   const counterState =
     remaining < 0 ? "bc-counter-over" : remaining <= 60 ? "bc-counter-warn" : "";
@@ -1039,6 +1081,7 @@ export default function App() {
     setTouched({});
     setKeptEmail("");
     setKeptTopic("");
+    setKeptUnattached(false);
     setReference("");
     setCopiedRef("");
     setFollowingUp("");
@@ -2255,6 +2298,32 @@ export default function App() {
                   <label htmlFor="bc-files">
                     Attachments <span className="bc-optional">optional</span>
                   </label>
+
+                  {/* Above the drop zone, so the note and the way to answer
+                      it are the same glance. Nothing is blocked: plenty of
+                      messages mention a file that was sent somewhere else,
+                      or last week, and the sender is the one who knows. */}
+                  {missingAttachment && (
+                    <div className="bc-suggest" role="status">
+                      <span>
+                        Your message mentions something attached —{" "}
+                        <button
+                          type="button"
+                          className="bc-suggest-fix"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          add it now
+                        </button>
+                      </span>
+                      <button
+                        type="button"
+                        className="bc-suggest-keep"
+                        onClick={() => setKeptUnattached(true)}
+                      >
+                        Nothing to attach
+                      </button>
+                    </div>
+                  )}
 
                   <div
                     className={`bc-drop ${dragging ? "bc-drop-on" : ""} ${fileError ? "bc-error" : ""}`}

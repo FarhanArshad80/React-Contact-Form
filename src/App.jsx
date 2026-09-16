@@ -22,6 +22,12 @@ const SENT_KEY = "beacon.contact-sent";
 // week and cannot find the confirmation for. Past that it is history, and
 // history belongs in the inbox rather than on the form.
 const MAX_SENT = 5;
+
+// How long a discarded draft is held before it is really gone. Long enough
+// to press the wrong button, read the empty form, and understand what
+// happened; short enough that it is not still offering to undo something
+// from several minutes ago by the time the replacement is written.
+const UNDO_SECONDS = 20;
 const EMPTY_VALUES = { topic: "", name: "", email: "", message: "" };
 
 // Named the way the keyboard in front of the sender names it. Read once:
@@ -690,6 +696,10 @@ export default function App() {
 
     return FIELD_ORDER.some((field) => draft[field]);
   });
+  // The message "Start fresh" just erased, held for as long as it takes to
+  // realise that was the wrong button. Null the rest of the time, which is
+  // also what makes the offer disappear.
+  const [discarded, setDiscarded] = useState(null);
   const liveRegionRef = useRef(null);
   const fieldRefs = useRef({});
   const fileInputRef = useRef(null);
@@ -726,6 +736,17 @@ export default function App() {
     const timer = setTimeout(() => setCopiedRef(""), 2000);
     return () => clearTimeout(timer);
   }, [copiedRef]);
+
+  // Same shape as the timer above, a great deal longer. Two seconds is right
+  // for reading a confirmation; this one has to survive the pause between
+  // pressing a button and understanding what it did, and the offer sits in
+  // the corner of a form somebody has already started retyping.
+  useEffect(() => {
+    if (!discarded) return undefined;
+
+    const timer = setTimeout(() => setDiscarded(null), UNDO_SECONDS * 1000);
+    return () => clearTimeout(timer);
+  }, [discarded]);
 
   // The clipboard can be refused outright: an insecure context, a denied
   // permission, an older browser. The reference is on screen either way, so
@@ -1072,6 +1093,7 @@ export default function App() {
 
   const resetForm = () => {
     setRestored(false);
+    setDiscarded(null);
     clearDraft();
     files.forEach((item) => URL.revokeObjectURL(item.url));
     setFiles([]);
@@ -1156,9 +1178,42 @@ export default function App() {
   // Throwing the draft away leaves an empty form and no obvious next step,
   // so focus goes to the first question rather than staying on a button that
   // has just erased everything around it.
+  //
+  // It is also the most expensive button on the page. "Start fresh" sits an
+  // inch from the message it deletes, it deletes it instantly, and what it
+  // deletes may not be the presser's to delete — the banner above it exists
+  // precisely because this form opens onto other people's half-written
+  // messages. So the words are kept for a moment, after `resetForm` has
+  // cleared its own undo, rather than before.
   const discardDraft = () => {
+    // Attachments cannot come back. They were never in the saved draft, and
+    // clearing the form revokes their object URLs — so the count is kept in
+    // order to say so, rather than restoring a message that goes on
+    // promising a screenshot that is no longer there.
+    const held = { values, files: files.length };
+
     resetForm();
+    setDiscarded(held);
     fieldRefs.current.topic?.focus();
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = "Draft discarded. You can still undo it.";
+    }
+  };
+
+  const restoreDraft = () => {
+    if (!discarded) return;
+
+    setValues(discarded.values);
+    setDiscarded(null);
+    // Not "restored": that banner is about a draft found in storage at the
+    // start of a visit, and this one was on screen a moment ago.
+    setRestored(false);
+    fieldRefs.current.message?.focus();
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = "Draft restored.";
+    }
   };
 
   return (
@@ -1795,6 +1850,16 @@ export default function App() {
         }
         .bc-restored-close:hover { color: var(--text) !important; }
 
+        /* A question, not a failure — so it borrows the beacon amber rather
+           than the red the real errors use. The left edge is what separates
+           it at a glance from the restored banner it replaces, which is
+           otherwise the same shape in the same place. */
+        .bc-undo {
+          border-left: 3px solid var(--accent);
+          background: var(--accent-soft);
+        }
+        .bc-undo p { color: var(--text); }
+
         /* ---------- Past references ---------- */
         /* Closed by default and quiet: this is a filing cabinet, not part of
            the task. It should be findable without ever competing with the
@@ -2110,6 +2175,37 @@ export default function App() {
                       type="button"
                       className="bc-restored-close"
                       onClick={() => setRestored(false)}
+                      aria-label="Dismiss"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+
+                {/* The same banner, in the amber this page uses for a
+                    question rather than a failure — nothing has gone wrong,
+                    and the only thing being asked is whether that was meant.
+                    It takes the restored banner's place rather than sitting
+                    under it: the draft that banner announced is exactly the
+                    one that has just gone. */}
+                {discarded && (
+                  <div className="bc-restored bc-undo" role="status">
+                    <p>
+                      Draft discarded.
+                      {discarded.files > 0 &&
+                        ` The ${
+                          discarded.files === 1 ? "attachment" : "attachments"
+                        } cannot be brought back.`}
+                    </p>
+
+                    <button type="button" onClick={restoreDraft}>
+                      Undo
+                    </button>
+
+                    <button
+                      type="button"
+                      className="bc-restored-close"
+                      onClick={() => setDiscarded(null)}
                       aria-label="Dismiss"
                     >
                       ×

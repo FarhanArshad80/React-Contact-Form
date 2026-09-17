@@ -420,8 +420,8 @@ export function messageCopy({ reference, topic, values, files, replyBy, about, s
   return lines.join("\n");
 }
 
-function downloadText(text, filename) {
-  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+function downloadText(text, filename, type = "text/plain;charset=utf-8") {
+  const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -533,6 +533,100 @@ export function replyBy(now, minutes, clock = deskClock) {
     hour: Math.floor(atMinute / 60),
     minute: atMinute % 60,
   };
+}
+
+// The moment `replyBy` names, as a real instant rather than a clock reading.
+//
+// The estimate is a day offset and a time on the desk's wall, which is all a
+// sentence needs. A calendar needs more: "9:03 tomorrow in New York" is a
+// different instant from one week to the next either side of a clock change,
+// and nothing about the desk's hours should depend on the visitor knowing
+// that. So the desk's calendar date is read first, moved on by the days the
+// estimate carries, and the wall time on it converted back to UTC.
+function zoneWallClock(date, zone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const read = (type) => Number(parts.find((part) => part.type === type)?.value);
+
+  return Date.UTC(read("year"), read("month") - 1, read("day"), read("hour"), read("minute"));
+}
+
+export function replyInstant(now, estimate, zone = DESK_TIMEZONE) {
+  const today = new Date(zoneWallClock(now, zone));
+  const wall = Date.UTC(
+    today.getUTCFullYear(),
+    today.getUTCMonth(),
+    today.getUTCDate() + estimate.daysAhead,
+    estimate.hour,
+    estimate.minute
+  );
+
+  // The zone's offset at that moment, measured rather than assumed. Measured
+  // twice, because the first guess can land on the other side of a clock
+  // change from the answer.
+  let instant = wall - (zoneWallClock(new Date(wall), zone) - wall);
+  instant = wall - (zoneWallClock(new Date(instant), zone) - instant);
+
+  return new Date(instant);
+}
+
+function icsText(value) {
+  return String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\r?\n/g, "\\n");
+}
+
+function icsStamp(date) {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+// A reminder for the moment an answer is owed.
+//
+// The success screen promises "by 3:20 pm tomorrow" and then the promise
+// lives nowhere but a tab that is about to be closed. If the answer never
+// comes, the sender is the only person in a position to notice — and they
+// have no way to notice unless something reminds them when the time comes.
+//
+// A calendar file is the one thing every diary on every platform already
+// opens. The event carries the reference, because the reference is what
+// they will need in their hand if they have to chase it — and nothing else
+// from the message, for the same reason the form keeps nothing else.
+export function replyReminder({ reference, topic, replyAt, stamp = new Date() }) {
+  const end = new Date(replyAt.getTime() + 15 * 60 * 1000);
+  const desk = topic?.desk || "the Beacon team";
+
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Beacon//Contact form//EN",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:${reference}@beacon`,
+    `DTSTAMP:${icsStamp(stamp)}`,
+    `DTSTART:${icsStamp(replyAt)}`,
+    `DTEND:${icsStamp(end)}`,
+    `SUMMARY:${icsText(`Reply due from Beacon · ${reference}`)}`,
+    `DESCRIPTION:${icsText(
+      `${desk} said they would answer by now. If nothing has arrived, follow up and quote ${reference}.`
+    )}`,
+    "BEGIN:VALARM",
+    "ACTION:DISPLAY",
+    `DESCRIPTION:${icsText(`Has Beacon replied? Reference ${reference}`)}`,
+    "TRIGGER:PT0M",
+    "END:VALARM",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
 }
 
 // "by 3:20 pm ET", with the day named only when it is not this one - the
@@ -669,6 +763,10 @@ export default function App() {
   // made at a particular moment and should not quietly slide while somebody
   // is reading it.
   const [sentReplyBy, setSentReplyBy] = useState("");
+  // The same promise as an instant, for the calendar reminder. Kept beside
+  // the sentence rather than derived from it, since the sentence has already
+  // thrown away the date it was counting from.
+  const [sentReplyAt, setSentReplyAt] = useState(null);
   // What the confirmation is a confirmation of: the moment it went, and the
   // thread it was chasing. Both are cleared from the form the instant it
   // sends, and the copy offered on this screen has to describe the message
@@ -1000,13 +1098,20 @@ export default function App() {
         /* the reference is still on screen; it just will not be here later */
       }
 
+      // One clock reading for all three, so the time sent, the sentence and
+      // the calendar entry cannot disagree by the minute between them.
+      const sentMoment = new Date();
+      const estimate = replyBy(
+        sentMoment,
+        findTopic(values.topic)?.replyMinutes ?? DEFAULT_REPLY_MINUTES
+      );
+
       setReference(ticket);
-      setSentAt(new Date());
+      setSentAt(sentMoment);
       setSentAbout(followingUp);
       setFollowingUp("");
-      setSentReplyBy(
-        replyByText(replyBy(new Date(), findTopic(values.topic)?.replyMinutes ?? DEFAULT_REPLY_MINUTES))
-      );
+      setSentReplyBy(replyByText(estimate));
+      setSentReplyAt(replyInstant(sentMoment, estimate));
       setStatus("sent");
       clearDraft();
       if (liveRegionRef.current) {
@@ -1108,6 +1213,7 @@ export default function App() {
     setCopiedRef("");
     setFollowingUp("");
     setSentAt(null);
+    setSentReplyAt(null);
     setSentAbout("");
     setStatus("idle");
   };
@@ -1128,6 +1234,22 @@ export default function App() {
 
     if (liveRegionRef.current) {
       liveRegionRef.current.textContent = `A copy of your message has been saved as beacon-${reference}.txt.`;
+    }
+  };
+
+  const saveReminder = () => {
+    if (!sentReplyAt) return;
+
+    const filename = `beacon-${reference}.ics`;
+
+    downloadText(
+      replyReminder({ reference, topic: selectedTopic, replyAt: sentReplyAt }),
+      filename,
+      "text/calendar;charset=utf-8"
+    );
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = `A calendar reminder for ${sentReplyBy} has been saved as ${filename}.`;
     }
   };
 
@@ -2146,6 +2268,12 @@ export default function App() {
                   <button type="button" className="bc-again" onClick={saveCopy}>
                     Save a copy
                   </button>
+                  {/* Only when there is a time to put in a calendar. */}
+                  {sentReplyAt && (
+                    <button type="button" className="bc-again" onClick={saveReminder}>
+                      Remind me {sentReplyBy}
+                    </button>
+                  )}
                   <button type="button" className="bc-again" onClick={resetForm}>
                     Send another message
                   </button>

@@ -677,10 +677,39 @@ function deskStatus(now = new Date()) {
 // A half-written message should survive a reload or a stray back button.
 // Storage can be unavailable (private windows, blocked site data) or hold
 // junk from an older build, so every read falls back to an empty form.
+// Past this a draft has stopped being unfinished business and become
+// litter. A month-old half-message is not something anyone is coming back
+// to finish, and on a shared machine it is a stranger's words sitting in a
+// form with their name above them.
+const DRAFT_KEEPS_MS = 30 * 24 * 60 * 60 * 1000;
+
+// When the draft was last written. Kept apart from the four field values so
+// that `values` stays exactly the shape the form renders, and a draft saved
+// by an older build — which carries no timestamp — still restores.
+export function loadDraftSavedAt() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DRAFT_KEY));
+    const at = Number(saved?.savedAt);
+
+    return Number.isFinite(at) && at > 0 && at <= Date.now() ? at : null;
+  } catch {
+    return null;
+  }
+}
+
 function loadDraft() {
   try {
     const saved = JSON.parse(localStorage.getItem(DRAFT_KEY));
     if (!saved || typeof saved !== "object") return EMPTY_VALUES;
+
+    // Old enough to be forgotten. Dropped on the way out rather than shown
+    // and then argued with, so the form simply opens empty.
+    const at = Number(saved.savedAt);
+    if (Number.isFinite(at) && Date.now() - at > DRAFT_KEEPS_MS) {
+      clearDraft();
+      return EMPTY_VALUES;
+    }
+
     return {
       topic: findTopic(saved.topic) ? saved.topic : "",
       name: typeof saved.name === "string" ? saved.name : "",
@@ -794,6 +823,9 @@ export default function App() {
 
     return FIELD_ORDER.some((field) => draft[field]);
   });
+  // Read once, beside `restored`, because it describes the draft this visit
+  // opened onto — not the one being typed now, which is a second old.
+  const [restoredAt] = useState(loadDraftSavedAt);
   // The message "Start fresh" just erased, held for as long as it takes to
   // realise that was the wrong button. Null the rest of the time, which is
   // also what makes the offer disappear.
@@ -820,7 +852,7 @@ export default function App() {
     }
 
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(values));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...values, savedAt: Date.now() }));
     } catch {
       /* the form still works without a saved draft */
     }
@@ -2293,7 +2325,12 @@ export default function App() {
                     half-written message with no obvious way out of it. */}
                 {restored && (
                   <div className="bc-restored" role="status">
-                    <p>Picked up where you left off.</p>
+                    <p>
+                      Picked up where you left off
+                      {/* A draft from a build before timestamps says nothing
+                          about when, rather than guessing at it. */}
+                      {restoredAt ? ` — saved ${sentWhen(restoredAt)}.` : "."}
+                    </p>
 
                     <button type="button" onClick={discardDraft}>
                       Start fresh

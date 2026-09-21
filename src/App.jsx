@@ -9,6 +9,12 @@ import { useState, useRef, useEffect, useMemo } from "react";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MESSAGE_MAX = 600;
+// How tall the message box is allowed to get before it starts scrolling
+// instead. Six hundred characters is about ten lines of prose, which fits
+// comfortably under this; the cap is really there for the message that is
+// mostly line breaks, so a list of steps to reproduce cannot push the send
+// button off the bottom of the screen.
+const MESSAGE_BOX_MAX = 320;
 const FIELD_ORDER = ["topic", "name", "email", "message"];
 const FIELD_LABELS = {
   topic: "the topic",
@@ -1078,6 +1084,31 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files, status]);
 
+  // The box grows with what is in it. A four-line window onto a message that
+  // is allowed to run to six hundred characters meant writing the end of it
+  // without being able to see the beginning — and re-reading before sending
+  // is most of what the last minute before sending is for.
+  //
+  // Driven off the value rather than off keystrokes, so the box is already
+  // the right size for a draft restored from last week or a message quoted
+  // into a follow-up, neither of which involves anybody typing.
+  useEffect(() => {
+    const box = fieldRefs.current.message;
+
+    if (!box) return;
+
+    // Measured from nothing first. `scrollHeight` reports the content or the
+    // current height, whichever is larger, so growing works without this but
+    // shrinking never does — the box would keep the height of the longest
+    // thing ever typed into it.
+    box.style.height = "auto";
+
+    const wanted = Math.min(box.scrollHeight, MESSAGE_BOX_MAX);
+
+    box.style.height = `${wanted}px`;
+    box.style.overflowY = box.scrollHeight > MESSAGE_BOX_MAX ? "auto" : "hidden";
+  }, [values.message]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     const nextErrors = {
@@ -1654,7 +1685,10 @@ export default function App() {
           outline: none;
           background: rgba(245, 166, 35, 0.04);
         }
-        .bc-field textarea { min-height: 110px; resize: vertical; }
+        /* No resize handle: the box sizes itself now, and a corner that
+           fights the next keystroke back to the height of the text is worse
+           than no corner at all. */
+        .bc-field textarea { min-height: 110px; resize: none; }
 
         /* Sits between the label and the box so it is read before the field
            is filled in, not after. */

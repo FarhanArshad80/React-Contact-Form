@@ -744,10 +744,52 @@ function loadSent() {
           typeof item.reference === "string" &&
           Number.isFinite(item.at)
       )
+      // Capped on the way in as well as on the way out: what comes back from
+      // storage was written by an older build, or by hand, and this one goes
+      // straight onto the screen.
+      .map((item) =>
+        typeof item.summary === "string" && item.summary.trim()
+          ? { ...item, summary: item.summary.trim().slice(0, SUMMARY_MAX + 1) }
+          : { ...item, summary: "" }
+      )
       .slice(0, MAX_SENT);
   } catch {
     return [];
   }
+}
+
+// The opening of a sent message, as a line to recognise it by.
+//
+// A reference is a good thing to quote and a poor thing to read: three
+// support messages in a fortnight are three rows reading "Support · 4 days
+// ago", and picking the right one to follow up on meant guessing from the
+// date. The first line is almost always the subject somebody would have
+// written if the form had asked for one.
+//
+// Stays on this device, in the same place the draft already lives, and never
+// goes anywhere the message itself has not already been.
+const SUMMARY_MAX = 64;
+
+export function summarise(message) {
+  const text = String(message || "").trim();
+
+  if (!text) return "";
+
+  // The first line, or the first sentence when the whole message is one
+  // paragraph — which is what "I cannot log in. It started this morning…"
+  // should be recognised by.
+  const firstLine = text.split(/\r?\n/)[0].trim();
+  const opening = firstLine.split(/(?<=[.!?])\s/)[0].trim() || firstLine;
+  const clean = opening.replace(/\s+/g, " ");
+
+  if (clean.length <= SUMMARY_MAX) return clean;
+
+  // Cut at a word rather than mid-syllable, unless the first word is longer
+  // than the whole allowance — a pasted URL, usually.
+  const cut = clean.slice(0, SUMMARY_MAX);
+  const lastSpace = cut.lastIndexOf(" ");
+
+  return `${(lastSpace > SUMMARY_MAX / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
 // Days rather than hours: someone checking a reference is asking "was that
@@ -1146,6 +1188,9 @@ export default function App() {
         reference: ticket,
         topic: values.topic,
         at: Date.now(),
+        // What the message opened with, so the row can be told apart from
+        // the last two filed under the same desk.
+        summary: summarise(values.message),
         // Kept so the history reads as a thread rather than as two unrelated
         // messages about the same thing. Left off entirely when there is
         // nothing being chased, so old records keep their shape.
@@ -2102,6 +2147,26 @@ export default function App() {
           user-select: all;
         }
         .bc-history li span { color: var(--text-muted); font-size: 12px; }
+        .bc-history-what {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: baseline;
+          gap: 4px 10px;
+          min-width: 0;
+        }
+        /* Its own line, and one line only. A message that opens with a
+           paragraph should not push the two buttons beside it down the
+           page. */
+        .bc-history-summary {
+          flex-basis: 100%;
+          margin: 0;
+          color: var(--text-muted);
+          font-size: 12px;
+          font-style: italic;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
         /* Pushed to the end of the row rather than sharing the space
            evenly: it is an action, not a third piece of the reference. */
         .bc-history-copy {
@@ -2753,6 +2818,7 @@ export default function App() {
                     <ul>
                       {sent.map((item) => (
                         <li key={item.reference}>
+                          <div className="bc-history-what">
                           <code>{item.reference}</code>
                           <span>
                             {findTopic(item.topic)?.label || "Something else"}
@@ -2768,6 +2834,18 @@ export default function App() {
                               </>
                             )}
                           </span>
+                          {/* Under the reference rather than beside it: a
+                              line of somebody's own words is the part of
+                              this row that gets read, and squeezing it in
+                              next to the code would truncate it to nothing
+                              on a phone. Absent on anything filed before
+                              this was kept, which reads as it used to. */}
+                          {item.summary && (
+                            <p className="bc-history-summary" title={item.summary}>
+                              “{item.summary}”
+                            </p>
+                          )}
+                          </div>
                           {/* The line under this list asks people to quote
                               one of these. Reading six characters off the
                               screen and retyping them into an email is

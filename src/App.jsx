@@ -878,6 +878,10 @@ export default function App() {
   // realise that was the wrong button. Null the rest of the time, which is
   // also what makes the offer disappear.
   const [discarded, setDiscarded] = useState(null);
+  // The name and address a second message was started with, carried over
+  // from the first. Held so the draft can tell "who is writing" apart from
+  // "something being written" — the first is not worth restoring next visit.
+  const [carried, setCarried] = useState(null);
   const liveRegionRef = useRef(null);
   const fieldRefs = useRef({});
   const fileInputRef = useRef(null);
@@ -899,12 +903,27 @@ export default function App() {
       return;
     }
 
+    // Nothing but the name and address brought across from the last
+    // message. That is not a half-written message, and saving it would
+    // greet the next visit with "picked up where you left off" over a form
+    // with nothing in it to pick up.
+    if (
+      carried &&
+      !values.topic &&
+      !values.message &&
+      values.name === carried.name &&
+      values.email === carried.email
+    ) {
+      clearDraft();
+      return;
+    }
+
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...values, savedAt: Date.now() }));
     } catch {
       /* the form still works without a saved draft */
     }
-  }, [values, status]);
+  }, [values, status, carried]);
 
   // "Copied" is a confirmation, not a state worth keeping - it goes back to
   // an offer of the action a couple of seconds later.
@@ -1323,7 +1342,33 @@ export default function App() {
     setSentAt(null);
     setSentReplyAt(null);
     setSentAbout("");
+    setCarried(null);
     setStatus("idle");
+  };
+
+  // A second message is almost always from the same person, often a minute
+  // after the first — the thing they forgot to say. Retyping a name and an
+  // address the form was given a moment ago is pure friction, so those two
+  // stay; the topic, the message and the attachments were about the last
+  // one and go.
+  //
+  // Only from here. "Start fresh" on a restored draft still clears
+  // everything, because that button exists for the stranger's draft on a
+  // shared machine, and a stranger's name is part of what it is clearing.
+  const sendAnother = () => {
+    const identity = { name: values.name, email: values.email };
+
+    resetForm();
+    setValues({ ...EMPTY_VALUES, ...identity });
+    setCarried(identity);
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = "Ready for another message. Your name and email are already filled in.";
+    }
+
+    // Straight to what still needs answering. After the paint, since the
+    // form is not on screen until the success message has gone.
+    requestAnimationFrame(() => fieldRefs.current.topic?.focus());
   };
 
   const saveCopy = () => {
@@ -2405,7 +2450,7 @@ export default function App() {
                       Remind me {sentReplyBy}
                     </button>
                   )}
-                  <button type="button" className="bc-again" onClick={resetForm}>
+                  <button type="button" className="bc-again" onClick={sendAnother}>
                     Send another message
                   </button>
                 </div>

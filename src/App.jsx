@@ -900,6 +900,7 @@ export default function App() {
   const liveRegionRef = useRef(null);
   const fieldRefs = useRef({});
   const fileInputRef = useRef(null);
+  const historySummaryRef = useRef(null);
 
   // A tab left open across the desk closing should not keep promising a
   // five-minute reply, so the status is re-read every minute.
@@ -1469,6 +1470,38 @@ export default function App() {
         box.setSelectionRange(nextMessage.length, nextMessage.length);
       });
     }
+  };
+
+  // Takes one row out of the list on this device. The history is kept so
+  // that it can be left on a shared machine, but "nothing but the reference"
+  // still says someone here wrote to the support desk, and the opening line
+  // now says what about. That is not something the sender should have to
+  // clear their whole browser's site data to take back.
+  //
+  // Only here. The desk still has the message, and the reference still
+  // finds it — this is the sender's filing cabinet, not theirs.
+  const forgetSent = (reference) => () => {
+    const remaining = sent.filter((item) => item.reference !== reference);
+
+    setSent(remaining);
+
+    try {
+      if (remaining.length) {
+        localStorage.setItem(SENT_KEY, JSON.stringify(remaining));
+      } else {
+        localStorage.removeItem(SENT_KEY);
+      }
+    } catch {
+      /* gone from the screen; storage will catch up if it ever comes back */
+    }
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = `${reference} removed from this browser.`;
+    }
+
+    // The button that was pressed has just gone with its row, so focus goes
+    // to the heading of the list rather than falling back to the page.
+    if (remaining.length) historySummaryRef.current?.focus();
   };
 
   // Throwing the draft away leaves an empty form and no obvious next step,
@@ -2295,6 +2328,27 @@ export default function App() {
           outline: 2px solid var(--accent);
           outline-offset: 2px;
         }
+        /* The same quiet cross the dismissable banners use: removing a row
+           from a list on this device is housekeeping, and it should not look
+           as though it recalls the message from the desk. */
+        .bc-history-forget {
+          flex-shrink: 0;
+          margin-left: 2px;
+          width: 22px; height: 22px;
+          border: none;
+          border-radius: 50%;
+          background: transparent;
+          color: var(--text-muted);
+          font-size: 15px;
+          line-height: 1;
+          cursor: pointer;
+          transition: background 0.2s ease, color 0.2s ease;
+        }
+        .bc-history-forget:hover { background: var(--accent-soft); color: var(--text); }
+        .bc-history-forget:focus-visible {
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
+        }
         .bc-history > p {
           margin: 12px 0 0;
           font-size: 12px;
@@ -2876,7 +2930,7 @@ export default function App() {
                     the visit that comes back, not the one about to send. */}
                 {sent.length > 0 && (
                   <details className="bc-history">
-                    <summary>
+                    <summary ref={historySummaryRef}>
                       Sent from this browser before
                       <span className="bc-history-count">{sent.length}</span>
                     </summary>
@@ -2937,13 +2991,23 @@ export default function App() {
                           >
                             Follow up
                           </button>
+                          <button
+                            type="button"
+                            className="bc-history-forget"
+                            onClick={forgetSent(item.reference)}
+                            aria-label={`Remove ${item.reference} from this browser`}
+                            title="Remove from this browser"
+                          >
+                            ×
+                          </button>
                         </li>
                       ))}
                     </ul>
 
                     <p>
                       Quote one of these and the desk can find the thread
-                      without you retelling it.
+                      without you retelling it. Removing one only clears it
+                      from this browser.
                     </p>
                   </details>
                 )}

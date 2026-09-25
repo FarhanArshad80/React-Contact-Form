@@ -792,6 +792,21 @@ export function summarise(message) {
   return `${(lastSpace > SUMMARY_MAX / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
+// What a message says once the line "Follow up" wrote into it is taken off.
+//
+// Pressing Follow up fills the box with "Following up on SUP-XXXXXX:" and
+// puts the caret after it. That line is twenty-odd characters, which clears
+// the minimum length on its own — so a follow-up sent a moment too early
+// arrived at the desk as a reference and nothing else, asking them to guess
+// what the sender came back to say.
+const FOLLOW_UP_LINE = new RegExp(
+  `^\\s*Following up on [A-Z]{3}-[${REFERENCE_ALPHABET}]{${REFERENCE_LENGTH}}:?`
+);
+
+export function followUpBody(message) {
+  return String(message || "").replace(FOLLOW_UP_LINE, "").trim();
+}
+
 // Days rather than hours: someone checking a reference is asking "was that
 // the one from Tuesday?", not counting the minutes since.
 function sentWhen(at) {
@@ -969,6 +984,12 @@ export default function App() {
     if (field === "name") return val.trim().length < 2 ? "Enter your full name." : "";
     if (field === "email") return !EMAIL_RE.test(val) ? "Enter a valid email address." : "";
     if (field === "message") {
+      // The quoted line is the form's words, not the sender's. On its own it
+      // is long enough to clear the ten-character bar below, and it tells the
+      // desk which thread this is without saying a thing about what changed.
+      if (val.trim() && !followUpBody(val)) {
+        return "Say what's new since the last message — the reference alone won't tell us.";
+      }
       if (val.trim().length < 10) return "Say a little more — at least 10 characters.";
       if (val.length > MESSAGE_MAX) return `Keep it under ${MESSAGE_MAX} characters.`;
       return "";

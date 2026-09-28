@@ -979,6 +979,21 @@ export default function App() {
     }
   }, [values, status, carried, linkedTopic]);
 
+  // The tab says the message went, and under which reference. A sent form is
+  // usually left open in a tab while the sender gets on with something else,
+  // and from the tab strip it looked exactly like the empty form it started
+  // as. Put back when the form comes back, and when the page goes.
+  useEffect(() => {
+    if (status !== "sent" || !reference) return undefined;
+
+    const original = document.title;
+
+    document.title = `Message sent · ${reference}`;
+    return () => {
+      document.title = original;
+    };
+  }, [status, reference]);
+
   // "Copied" is a confirmation, not a state worth keeping - it goes back to
   // an offer of the action a couple of seconds later.
   useEffect(() => {

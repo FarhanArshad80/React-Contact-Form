@@ -2796,9 +2796,18 @@ export default function App() {
                     <span
                       className={`bc-counter ${counterState}`}
                       id="bc-message-counter"
-                      aria-label={`${values.message.length} of ${MESSAGE_MAX} characters used`}
+                      aria-label={
+                        remaining < 0
+                          ? `${-remaining} characters over the ${MESSAGE_MAX} limit`
+                          : `${values.message.length} of ${MESSAGE_MAX} characters used`
+                      }
                     >
-                      {values.message.length}/{MESSAGE_MAX}
+                      {/* Past the limit "642/600" leaves the subtraction to
+                          the sender, and the number they need is how much
+                          to cut. */}
+                      {remaining < 0
+                        ? `${-remaining} over`
+                        : `${values.message.length}/${MESSAGE_MAX}`}
                     </span>
                   </div>
                 </div>

@@ -1662,6 +1662,27 @@ export default function App() {
     if (remaining.length) historySummaryRef.current?.focus();
   };
 
+  // The whole list at once. Removing five rows one cross at a time is the
+  // chore of someone leaving a shared machine, and it is the moment they
+  // are least inclined to do it carefully.
+  const forgetAllSent = () => {
+    setSent([]);
+
+    try {
+      localStorage.removeItem(SENT_KEY);
+    } catch {
+      /* gone from the screen; storage will catch up if it ever comes back */
+    }
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = "All sent references removed from this browser.";
+    }
+
+    // The list and everything in it has gone, so focus goes to the send
+    // button — the nearest thing still on the page.
+    requestAnimationFrame(() => document.querySelector(".bc-submit")?.focus());
+  };
+
   // Throwing the draft away leaves an empty form and no obvious next step,
   // so focus goes to the first question rather than staying on a button that
   // has just erased everything around it.
@@ -2523,6 +2544,7 @@ export default function App() {
           color: var(--text-muted);
         }
 
+        .bc-history-clear { margin: 8px 0 0; }
         .bc-success-actions {
           display: flex;
           flex-wrap: wrap;
@@ -3219,6 +3241,16 @@ export default function App() {
                       without you retelling it. Removing one only clears it
                       from this browser.
                     </p>
+
+                    {sent.length > 1 && (
+                      <button
+                        type="button"
+                        className="bc-following-clear bc-history-clear"
+                        onClick={forgetAllSent}
+                      >
+                        Remove all from this browser
+                      </button>
+                    )}
                   </details>
                 )}
               </>

@@ -982,7 +982,13 @@ export default function App() {
 
   const validate = (field, val) => {
     if (field === "topic") return !findTopic(val) ? "Pick what this is about." : "";
-    if (field === "name") return val.trim().length < 2 ? "Enter your full name." : "";
+    if (field === "name") {
+      // Autofill and fast tabbing both land the address in the first box
+      // that will take it. A reply addressed "Hi jordan@company.com" is the
+      // desk telling the sender the form went wrong.
+      if (EMAIL_RE.test(val.trim())) return "That looks like an email — your name goes here.";
+      return val.trim().length < 2 ? "Enter your full name." : "";
+    }
     if (field === "email") return !EMAIL_RE.test(val) ? "Enter a valid email address." : "";
     if (field === "message") {
       // The quoted line is the form's words, not the sender's. On its own it

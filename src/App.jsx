@@ -727,6 +727,29 @@ function loadDraft() {
   }
 }
 
+// The desk a link asked for, as in /contact?topic=sales from a pricing page.
+// Whoever wrote that link already knows what the visitor is here about, and
+// making them answer the question again is the form ignoring it. Anything
+// that is not one of the desks is ignored rather than guessed at.
+export function topicFromUrl(search = typeof window !== "undefined" ? window.location.search : "") {
+  try {
+    const asked = new URLSearchParams(search).get("topic")?.trim().toLowerCase();
+
+    return asked && findTopic(asked) ? asked : "";
+  } catch {
+    return "";
+  }
+}
+
+// What the form opens with: the saved draft, and the linked desk only where
+// the draft has not already answered that question. A half-written message
+// filed under Support stays under Support whatever link brought it back.
+function initialValues() {
+  const draft = loadDraft();
+
+  return draft.topic ? draft : { ...draft, topic: topicFromUrl() };
+}
+
 // References sent from this browser, newest first. Only the reference, the
 // desk it went to and when — no name, email or message body, because none of
 // that has to sit in storage for the reference to be useful, and all of it
@@ -831,7 +854,10 @@ function clearDraft() {
 }
 
 export default function App() {
-  const [values, setValues] = useState(loadDraft);
+  const [values, setValues] = useState(initialValues);
+  // The desk the link asked for, read once. Held so that a form holding
+  // nothing but that answer is not mistaken for a draft worth keeping.
+  const [linkedTopic] = useState(topicFromUrl);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [status, setStatus] = useState("idle"); // idle | sending | sent
@@ -934,12 +960,24 @@ export default function App() {
       return;
     }
 
+    // Only the topic the link picked. Nobody has written anything yet.
+    if (
+      linkedTopic &&
+      values.topic === linkedTopic &&
+      !values.name &&
+      !values.email &&
+      !values.message
+    ) {
+      clearDraft();
+      return;
+    }
+
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...values, savedAt: Date.now() }));
     } catch {
       /* the form still works without a saved draft */
     }
-  }, [values, status, carried]);
+  }, [values, status, carried, linkedTopic]);
 
   // "Copied" is a confirmation, not a state worth keeping - it goes back to
   // an offer of the action a couple of seconds later.

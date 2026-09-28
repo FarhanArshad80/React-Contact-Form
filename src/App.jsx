@@ -2632,6 +2632,10 @@ export default function App() {
                   <input
                     id="bc-name"
                     type="text"
+                    // Autofill knows both of these already. Saying which is
+                    // which lets the browser offer them in one tap instead
+                    // of guessing from the placeholder, or not at all.
+                    autoComplete="name"
                     ref={(el) => (fieldRefs.current.name = el)}
                     placeholder="Jordan Blake"
                     value={values.name}
@@ -2650,6 +2654,13 @@ export default function App() {
                   <input
                     id="bc-email"
                     type="email"
+                    autoComplete="email"
+                    // A phone keyboard capitalising the first letter and
+                    // "correcting" the domain is how jordan@ becomes
+                    // Jordan@gmail.co before anyone looks.
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     ref={(el) => (fieldRefs.current.email = el)}
                     placeholder="jordan@company.com"
                     value={values.email}

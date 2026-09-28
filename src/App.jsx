@@ -1006,9 +1006,21 @@ export default function App() {
     }
   };
 
+  // An address copied out of an email signature nearly always brings a
+  // space or a line break with it, and " jordan@company.com" fails the
+  // address check for a reason nobody can see. The name and address are
+  // tidied as the sender leaves them; the message is left alone, because
+  // its spacing is the sender's.
+  const TRIMMED_FIELDS = ["name", "email"];
+
   const handleBlur = (field) => (e) => {
+    const raw = e.target.value;
+    const val = TRIMMED_FIELDS.includes(field) ? raw.trim() : raw;
+
+    if (val !== raw) setValues((v) => ({ ...v, [field]: val }));
+
     setTouched((t) => ({ ...t, [field]: true }));
-    setErrors((er) => ({ ...er, [field]: validate(field, e.target.value) }));
+    setErrors((er) => ({ ...er, [field]: validate(field, val) }));
   };
 
   // Object URLs outlive the component unless they are handed back. Removing

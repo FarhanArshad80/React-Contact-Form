@@ -2175,6 +2175,13 @@ export default function App() {
           font-weight: 600;
           color: var(--accent);
         }
+        .bc-attachment-open {
+          display: flex;
+          flex-shrink: 0;
+          border-radius: 6px;
+          cursor: zoom-in;
+        }
+        .bc-attachment-open:hover .bc-attachment-thumb { outline: 1px solid var(--accent); }
         .bc-attachment-meta {
           display: flex;
           flex-direction: column;
@@ -3092,11 +3099,25 @@ export default function App() {
                     <ul className="bc-attachments">
                       {files.map((item) => (
                         <li key={item.id} className="bc-attachment">
-                          {item.file.type === "application/pdf" ? (
-                            <span className="bc-attachment-thumb bc-attachment-pdf">PDF</span>
-                          ) : (
-                            <img className="bc-attachment-thumb" src={item.url} alt="" />
-                          )}
+                          {/* Opens the file itself in a new tab. A 34px
+                              thumbnail cannot say whether it is the
+                              screenshot with the error on it or the one
+                              taken a second before, and a PDF shows no
+                              thumbnail at all. */}
+                          <a
+                            className="bc-attachment-open"
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Open ${item.file.name} in a new tab`}
+                            title="Open in a new tab"
+                          >
+                            {item.file.type === "application/pdf" ? (
+                              <span className="bc-attachment-thumb bc-attachment-pdf">PDF</span>
+                            ) : (
+                              <img className="bc-attachment-thumb" src={item.url} alt="" />
+                            )}
+                          </a>
 
                           <span className="bc-attachment-meta">
                             <strong>{item.file.name}</strong>

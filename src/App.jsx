@@ -923,6 +923,12 @@ export default function App() {
   // from the first. Held so the draft can tell "who is writing" apart from
   // "something being written" — the first is not worth restoring next visit.
   const [carried, setCarried] = useState(null);
+  // Whether there is a network to send over. A send attempted on a train
+  // between stations would sit on "Sending…" and then fail, and the sender
+  // could not tell whether the message had gone.
+  const [online, setOnline] = useState(
+    () => typeof navigator === "undefined" || navigator.onLine !== false
+  );
   const liveRegionRef = useRef(null);
   const fieldRefs = useRef({});
   const fileInputRef = useRef(null);
@@ -978,6 +984,18 @@ export default function App() {
       /* the form still works without a saved draft */
     }
   }, [values, status, carried, linkedTopic]);
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine !== false);
+
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
 
   // The tab says the message went, and under which reference. A sent form is
   // usually left open in a tab while the sender gets on with something else,
@@ -1288,6 +1306,16 @@ export default function App() {
             : `${invalid.length} fields need attention. Starting with ${FIELD_LABELS[invalid[0]]}: ${nextErrors[invalid[0]]}`;
       }
       fieldRefs.current[invalid[0]]?.focus();
+      return;
+    }
+
+    // Held rather than attempted. The draft is already saved, so nothing is
+    // lost by waiting, and the note above the button says so.
+    if (!online) {
+      if (liveRegionRef.current) {
+        liveRegionRef.current.textContent =
+          "You're offline. Your message is saved here — send it once you're back online.";
+      }
       return;
     }
 
@@ -2100,6 +2128,16 @@ export default function App() {
           margin-top: 8px;
           font-size: 11.5px;
           color: var(--text-muted);
+        }
+        .bc-offline {
+          margin: 0 0 12px;
+          padding: 10px 14px;
+          border: 1px solid var(--line);
+          border-left: 3px solid var(--accent);
+          border-radius: 10px;
+          font-size: 13px;
+          color: var(--text);
+          background: var(--accent-soft);
         }
         .bc-success-files {
           color: var(--text-muted);
@@ -3003,6 +3041,13 @@ export default function App() {
                     >
                       Send as a new message instead
                     </button>
+                  </p>
+                )}
+
+                {!online && (
+                  <p className="bc-offline" role="status">
+                    You're offline. Your message is saved on this device —
+                    send it once the connection is back.
                   </p>
                 )}
 

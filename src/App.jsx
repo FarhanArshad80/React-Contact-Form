@@ -365,6 +365,53 @@ export function mentionsAttachment(message) {
   return ATTACHMENT_PROMISES.some((pattern) => pattern.test(text));
 }
 
+// A payment card number, written into the message.
+//
+// Billing questions are where these turn up: "I was charged twice on my
+// card 4111 1111 1111 1111". The desk never needs more than the last four
+// digits to find a charge, and the whole number sitting in a support inbox
+// is a number that now lives in one more place than it should.
+//
+// Thirteen to nineteen digits, spaced or dashed the way cards are printed,
+// that also pass the Luhn check - which is what keeps order numbers and
+// phone numbers from setting it off.
+const CARD_PATTERN = /\b\d(?:[ -]?\d){12,18}\b/g;
+
+function passesLuhn(digits) {
+  let sum = 0;
+
+  for (let i = 0; i < digits.length; i += 1) {
+    let digit = Number(digits[digits.length - 1 - i]);
+
+    if (i % 2 === 1) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+
+    sum += digit;
+  }
+
+  return sum % 10 === 0;
+}
+
+export function findCardNumbers(message) {
+  const text = String(message || "");
+
+  return (text.match(CARD_PATTERN) || []).filter((candidate) =>
+    passesLuhn(candidate.replace(/\D/g, ""))
+  );
+}
+
+// The same message with every card number cut down to the last four digits,
+// which is all anyone at the desk will ask for.
+export function maskCardNumbers(message) {
+  return String(message || "").replace(CARD_PATTERN, (candidate) => {
+    const digits = candidate.replace(/\D/g, "");
+
+    return passesLuhn(digits) ? `card ending ${digits.slice(-4)}` : candidate;
+  });
+}
+
 // A reference gives the sender something to quote when they follow up, and
 // it is the first thing a desk asks for. The prefix says which queue it
 // belongs to; the body is random rather than sequential so it does not
@@ -1433,6 +1480,18 @@ export default function App() {
   // anyone having to dismiss it.
   const missingAttachment =
     !keptUnattached && files.length === 0 && mentionsAttachment(values.message);
+
+  // Not dismissible: unlike a guessed topic or a guessed typo, there is no
+  // message that is better for carrying a whole card number.
+  const cardInMessage = findCardNumbers(values.message).length > 0;
+
+  const maskCards = () => {
+    setValues((v) => ({ ...v, message: maskCardNumbers(v.message) }));
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = "Card number shortened to its last four digits.";
+    }
+  };
 
   const remaining = MESSAGE_MAX - values.message.length;
   const counterState =
@@ -2845,6 +2904,21 @@ export default function App() {
                         .join(" ")
                     }
                   />
+                  {cardInMessage && (
+                    <div className="bc-suggest" role="status">
+                      <span>
+                        That looks like a full card number — we only ever need
+                        the last four digits.{" "}
+                        <button
+                          type="button"
+                          className="bc-suggest-fix"
+                          onClick={maskCards}
+                        >
+                          Keep only the last four
+                        </button>
+                      </span>
+                    </div>
+                  )}
                   {/* Under the message rather than up beside the topic
                       buttons. This is read off what has just been typed, and
                       the row it refers to is several fields up the page —

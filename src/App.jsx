@@ -191,6 +191,20 @@ export function suggestEmail(email) {
   return best ? `${local}@${best}` : "";
 }
 
+// Addresses that exist to send mail and never read what comes back. They
+// pass every shape check there is, which is how they get here: autofill
+// offers the one on the last receipt, or a sender pastes the address the
+// notification came from. The reply goes out, nobody is there to read it,
+// and the sender is left believing they were ignored.
+const NO_REPLY_RE = /^(?:no[-_.]?reply|do[-_.]?not[-_.]?reply|dont[-_.]?reply|mailer[-_.]daemon)(?:[-_.+].*)?$/i;
+
+export function isNoReplyAddress(email) {
+  const address = String(email || "").trim();
+  const at = address.lastIndexOf("@");
+
+  return at > 0 && NO_REPLY_RE.test(address.slice(0, at));
+}
+
 // Everything lands in the same inbox today, but saying which desk picks it up
 // — and how quickly — sets a truthful expectation before anyone hits send.
 // Each desk opens with the same question, and it is always the one the
@@ -1107,7 +1121,13 @@ export default function App() {
       if (EMAIL_RE.test(val.trim())) return "That looks like an email — your name goes here.";
       return val.trim().length < 2 ? "Enter your full name." : "";
     }
-    if (field === "email") return !EMAIL_RE.test(val) ? "Enter a valid email address." : "";
+    if (field === "email") {
+      if (!EMAIL_RE.test(val)) return "Enter a valid email address.";
+      if (isNoReplyAddress(val)) {
+        return "That's a no-reply address — our answer would never reach you. Use one you read.";
+      }
+      return "";
+    }
     if (field === "message") {
       // The quoted line is the form's words, not the sender's. On its own it
       // is long enough to clear the ten-character bar below, and it tells the

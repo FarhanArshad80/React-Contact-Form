@@ -1239,6 +1239,19 @@ export default function App() {
     setFileError("");
   };
 
+  // Six screenshots from the wrong folder were six small crosses to aim at,
+  // one after another. Every object URL goes back on the way out, the same
+  // as removing them singly.
+  const removeAllFiles = () => {
+    files.forEach((item) => URL.revokeObjectURL(item.url));
+    setFiles([]);
+    setFileError("");
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = "All attachments removed.";
+    }
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     setDragging(false);
@@ -2236,6 +2249,7 @@ export default function App() {
           font-size: 11.5px;
           color: var(--text-muted);
         }
+        .bc-attachments-clear { display: block; margin: 6px 0 0; }
         .bc-offline {
           margin: 0 0 12px;
           padding: 10px 14px;
@@ -3162,6 +3176,16 @@ export default function App() {
                       Attachments aren't kept in your saved draft — reloading
                       the page will ask for them again.
                     </small>
+                  )}
+
+                  {files.length > 1 && (
+                    <button
+                      type="button"
+                      className="bc-following-clear bc-attachments-clear"
+                      onClick={removeAllFiles}
+                    >
+                      Remove all {files.length} attachments
+                    </button>
                   )}
                 </div>
 

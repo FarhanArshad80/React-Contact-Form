@@ -426,6 +426,45 @@ export function maskCardNumbers(message) {
   });
 }
 
+// "Can't log in, my password is Summer2024!" Somebody locked out will often
+// type the password to prove they had it right, and from then on it sits in
+// a support inbox in plain text. The desk resets passwords; it never needs
+// to know one.
+//
+// Two shapes. A label then a colon or equals sign takes any word after it,
+// because "password: ..." is nearly always followed by the thing itself. A
+// label then "is" only counts when the word has a digit, a symbol or quotes
+// around it, so "my password is wrong" and "the password is expired" stay
+// the ordinary complaints they are.
+const PASSWORD_PATTERN =
+  /\b(pass(?:word|code|wd)|pwd|pw)(\s*[:=]\s*|\s+is\s+)(["']?)(\S+?)\3(?=[\s.,;!?)]*(?:\s|$))/gi;
+
+function looksLikeSecret(separator, quote, word) {
+  if (/[:=]/.test(separator)) return word.length >= 3;
+  return Boolean(quote) || /[^A-Za-z]/.test(word);
+}
+
+export function findPasswords(message) {
+  const found = [];
+
+  for (const match of String(message || "").matchAll(PASSWORD_PATTERN)) {
+    const [, , separator, quote, word] = match;
+    if (looksLikeSecret(separator, quote, word)) found.push(word);
+  }
+
+  return found;
+}
+
+// The label is kept so the message still reads as the sender wrote it; only
+// the secret goes.
+export function removePasswords(message) {
+  return String(message || "").replace(
+    PASSWORD_PATTERN,
+    (whole, label, separator, quote, word) =>
+      looksLikeSecret(separator, quote, word) ? `${label}${separator}[removed]` : whole
+  );
+}
+
 // A reference gives the sender something to quote when they follow up, and
 // it is the first thing a desk asks for. The prefix says which queue it
 // belongs to; the body is random rather than sequential so it does not
@@ -1523,6 +1562,17 @@ export default function App() {
 
     if (liveRegionRef.current) {
       liveRegionRef.current.textContent = "Card number shortened to its last four digits.";
+    }
+  };
+
+  // Not dismissible either, for the same reason as the card number.
+  const passwordInMessage = findPasswords(values.message).length > 0;
+
+  const scrubPasswords = () => {
+    setValues((v) => ({ ...v, message: removePasswords(v.message) }));
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = "Password removed from the message.";
     }
   };
 
@@ -2978,6 +3028,21 @@ export default function App() {
                           onClick={maskCards}
                         >
                           Keep only the last four
+                        </button>
+                      </span>
+                    </div>
+                  )}
+                  {passwordInMessage && (
+                    <div className="bc-suggest" role="status">
+                      <span>
+                        That looks like a password — we'll never ask for one,
+                        and it shouldn't sit in our inbox.{" "}
+                        <button
+                          type="button"
+                          className="bc-suggest-fix"
+                          onClick={scrubPasswords}
+                        >
+                          Take it out
                         </button>
                       </span>
                     </div>

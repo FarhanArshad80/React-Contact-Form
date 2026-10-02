@@ -1253,6 +1253,7 @@ export default function App() {
 
     const accepted = [];
     let problem = "";
+    let duplicate = "";
 
     for (const file of candidates) {
       const issue = fileProblem(file);
@@ -1267,7 +1268,10 @@ export default function App() {
       const alreadyHere = (item) =>
         item.file.name === file.name && item.file.size === file.size;
 
-      if (files.some(alreadyHere) || accepted.some(alreadyHere)) continue;
+      if (files.some(alreadyHere) || accepted.some(alreadyHere)) {
+        duplicate = duplicate || `${file.name} is already attached.`;
+        continue;
+      }
 
       accepted.push({
         id: `${file.name}-${file.size}-${file.lastModified}`,
@@ -1286,6 +1290,11 @@ export default function App() {
     if (accepted.length > kept.length) {
       problem = problem || `You can attach up to ${MAX_FILES} files.`;
     }
+
+    // Skipping the second copy is right, but skipping it in silence read as
+    // the drop not having worked at all, and the live region announced "0
+    // files attached". Said only when nothing else was added.
+    if (!kept.length) problem = problem || duplicate;
 
     setFileError(problem);
     if (kept.length) setFiles((current) => [...current, ...kept]);

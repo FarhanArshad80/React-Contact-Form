@@ -431,38 +431,67 @@ export function maskCardNumbers(message) {
 // a support inbox in plain text. The desk resets passwords; it never needs
 // to know one.
 //
-// Two shapes. A label then a colon or equals sign takes any word after it,
-// because "password: ..." is nearly always followed by the thing itself. A
-// label then "is" only counts when the word has a digit, a symbol or quotes
-// around it, so "my password is wrong" and "the password is expired" stay
-// the ordinary complaints they are.
+// Two shapes. A label then a colon or equals sign takes the word after it,
+// because "password: ..." is nearly always followed by the thing itself -
+// unless that word is one of the ones people use to say what went wrong,
+// so "password: forgot it" is still a complaint. A label then "is" only
+// counts when the word has a digit, a symbol or quotes around it, so "my
+// password is wrong" and "the password is expired" stay the ordinary
+// complaints they are.
+//
+// A quoted password is taken whole, spaces and all. An unquoted one is
+// taken up to the next space, trailing "!" or "." included: that is often
+// part of the password, and losing a full stop costs nothing.
 const PASSWORD_PATTERN =
-  /\b(pass(?:word|code|wd)|pwd|pw)(\s*[:=]\s*|\s+is\s+)(["']?)(\S+?)\3(?=[\s.,;!?)]*(?:\s|$))/gi;
+  /\b(pass(?:word|code|wd)|pwd|pw)(\s*[:=]\s*|\s+is\s+)(?:"([^"\n]+)"|“([^”\n]+)”|'([^'\n]+)'|(\S+))/gi;
 
-function looksLikeSecret(separator, quote, word) {
-  if (/[:=]/.test(separator)) return word.length >= 3;
-  return Boolean(quote) || /[^A-Za-z]/.test(word);
+const NOT_A_PASSWORD = new Set([
+  "forgot", "forgotten", "reset", "expired", "wrong", "incorrect", "invalid",
+  "unknown", "lost", "changed", "none", "blank", "empty", "missing",
+  "required", "not", "never", "same", "nothing", "n/a", "doesn't", "didn't",
+  "isn't", "won't", "can't", "cannot", "still", "the", "my",
+]);
+
+function looksLikeSecret(separator, quoted, word) {
+  // What the form itself left behind, or what the sender already blanked.
+  if (/^(?:\[removed\]|\*+|•+)$/.test(word.trim())) return false;
+  if (quoted) return word.trim().length > 0;
+
+  // Judged without sentence punctuation, so "my password is wrong." is not
+  // mistaken for a word with a symbol in it.
+  const core = word.replace(/[.,;:!?)]+$/, "");
+
+  if (core.length < 3 || NOT_A_PASSWORD.has(core.toLowerCase())) return false;
+  if (/[:=]/.test(separator)) return true;
+  return /[^A-Za-z]/.test(core);
+}
+
+function passwordMatch(match) {
+  const [, label, separator, double, curly, single, bare] = match;
+  const quoted = double ?? curly ?? single;
+
+  return { label, separator, quoted: quoted !== undefined, word: quoted ?? bare };
 }
 
 export function findPasswords(message) {
   const found = [];
 
   for (const match of String(message || "").matchAll(PASSWORD_PATTERN)) {
-    const [, , separator, quote, word] = match;
-    if (looksLikeSecret(separator, quote, word)) found.push(word);
+    const { separator, quoted, word } = passwordMatch(match);
+    if (looksLikeSecret(separator, quoted, word)) found.push(word);
   }
 
   return found;
 }
 
 // The label is kept so the message still reads as the sender wrote it; only
-// the secret goes.
+// the secret goes, quotes and all.
 export function removePasswords(message) {
-  return String(message || "").replace(
-    PASSWORD_PATTERN,
-    (whole, label, separator, quote, word) =>
-      looksLikeSecret(separator, quote, word) ? `${label}${separator}[removed]` : whole
-  );
+  return String(message || "").replace(PASSWORD_PATTERN, (...args) => {
+    const { label, separator, quoted, word } = passwordMatch(args);
+
+    return looksLikeSecret(separator, quoted, word) ? `${label}${separator}[removed]` : args[0];
+  });
 }
 
 // A reference gives the sender something to quote when they follow up, and

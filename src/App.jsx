@@ -205,6 +205,35 @@ export function isNoReplyAddress(email) {
   return at > 0 && NO_REPLY_RE.test(address.slice(0, at));
 }
 
+// "Please reply to jordan@work.com" - written in the message, while the
+// email box above it holds a different address. The desk answers whatever
+// is in the box, so the address the sender actually asked for never hears
+// back.
+//
+// Only an address the message asks to be answered at, or calls the
+// sender's own ("my email is ..."). A message that merely mentions an
+// address - a colleague who cannot log in, the one an invoice went to - is
+// left alone.
+const REPLY_ADDRESS_PATTERN =
+  /(?:\b(?:reply|respond|write back|get back to me|contact me|reach me|e-?mail me)\b[^@\n]{0,20}?\b(?:at|to|on|via)|\bmy (?:new |other |work |personal |current |correct )?(?:e-?mail(?: address)?|address) is)\s+<?([^\s@<>"']+@[^\s@<>"']+)/gi;
+
+export function replyAddressInMessage(message, email) {
+  const current = String(email || "").trim().toLowerCase();
+
+  for (const match of String(message || "").matchAll(REPLY_ADDRESS_PATTERN)) {
+    // "Please don't email me at the old one" is the opposite request.
+    const before = match.input.slice(Math.max(0, match.index - 16), match.index);
+    if (/\b(?:don'?t|do not|never|stop|no longer)\s+(?:\w+\s+)?$/i.test(before)) continue;
+
+    const address = match[1].replace(/[.,;:!?)>]+$/, "");
+
+    if (!EMAIL_RE.test(address) || isNoReplyAddress(address)) continue;
+    if (address.toLowerCase() !== current) return address;
+  }
+
+  return "";
+}
+
 // Everything lands in the same inbox today, but saying which desk picks it up
 // — and how quickly — sets a truthful expectation before anyone hits send.
 // Each desk opens with the same question, and it is always the one the
@@ -1032,6 +1061,9 @@ export default function App() {
   // Plenty of messages mention a file that was sent somewhere else, or last
   // week, and the note should not survive being answered.
   const [keptUnattached, setKeptUnattached] = useState(false);
+  // The address in the message the sender has said not to reply to. Held as
+  // the address, like keptEmail, so naming a different one asks again.
+  const [keptReplyTo, setKeptReplyTo] = useState("");
   // Whether this visit opened onto someone else's half-written message —
   // their own from last time, or a colleague's on a shared machine. Read
   // from storage a second time rather than from `values`, so that typing the
@@ -1585,6 +1617,28 @@ export default function App() {
 
   const keepTopic = () => setKeptTopic(topicSuggestion);
 
+  // Not while the sender is still typing it: the box has been left before
+  // anything is said about what is in it, the same as the email typo.
+  const replyToSuggestion = useMemo(() => {
+    if (!touched.message) return "";
+
+    const found = replyAddressInMessage(values.message, values.email);
+
+    return found && found !== keptReplyTo ? found : "";
+  }, [values.message, values.email, touched.message, keptReplyTo]);
+
+  const acceptReplyTo = () => {
+    setValues((v) => ({ ...v, email: replyToSuggestion }));
+    setTouched((t) => ({ ...t, email: true }));
+    setErrors((er) => ({ ...er, email: validate("email", replyToSuggestion) }));
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = `We'll reply to ${replyToSuggestion}.`;
+    }
+  };
+
+  const keepReplyTo = () => setKeptReplyTo(replyToSuggestion);
+
   // A message that promises a file, with no file on it. Recomputed as both
   // halves change, so attaching the screenshot puts the note away without
   // anyone having to dismiss it.
@@ -1637,6 +1691,7 @@ export default function App() {
     setKeptEmail("");
     setKeptTopic("");
     setKeptUnattached(false);
+    setKeptReplyTo("");
     setReference("");
     setCopiedRef("");
     setFollowingUp("");
@@ -3068,6 +3123,29 @@ export default function App() {
                           Keep only the last four
                         </button>
                       </span>
+                    </div>
+                  )}
+                  {replyToSuggestion && (
+                    <div className="bc-suggest" role="status">
+                      <span>
+                        We reply to the address in the email box
+                        {values.email ? ` (${values.email})` : ""}, not one in
+                        the message.{" "}
+                        <button
+                          type="button"
+                          className="bc-suggest-fix"
+                          onClick={acceptReplyTo}
+                        >
+                          Reply to {replyToSuggestion}
+                        </button>
+                      </span>
+                      <button
+                        type="button"
+                        className="bc-suggest-keep"
+                        onClick={keepReplyTo}
+                      >
+                        {values.email ? `Keep ${values.email}` : "No thanks"}
+                      </button>
                     </div>
                   )}
                   {passwordInMessage && (

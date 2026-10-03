@@ -1158,6 +1158,22 @@ export default function App() {
     };
   }, []);
 
+  // The sent list in another tab of this browser. Somebody who sends from one
+  // tab and comes back to an older one found it still listing the history as
+  // it was when that tab opened — missing the newest reference, or offering
+  // to follow up on one they had already removed. The browser announces every
+  // write from elsewhere; a null key is the whole of storage being cleared.
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key !== SENT_KEY && event.key !== null) return;
+
+      setSent(loadSent());
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // The tab says the message went, and under which reference. A sent form is
   // usually left open in a tab while the sender gets on with something else,
   // and from the tab strip it looked exactly like the empty form it started

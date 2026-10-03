@@ -1090,6 +1090,12 @@ export default function App() {
   const [online, setOnline] = useState(
     () => typeof navigator === "undefined" || navigator.onLine !== false
   );
+  // Send was pressed while offline, and nothing has been changed since. The
+  // sender has already said this message is finished; making them notice the
+  // connection is back and press the button a second time is a wait they
+  // should not have to keep watch over.
+  const [heldForConnection, setHeldForConnection] = useState(false);
+  const formRef = useRef(null);
   const liveRegionRef = useRef(null);
   const fieldRefs = useRef({});
   const fileInputRef = useRef(null);
@@ -1157,6 +1163,20 @@ export default function App() {
       window.removeEventListener("offline", update);
     };
   }, []);
+
+  // Any change — a word, a topic, an attachment — means the form no longer
+  // holds the message send was pressed on, so it waits to be sent again.
+  useEffect(() => setHeldForConnection(false), [values, files]);
+
+  // A message held while offline goes the moment the connection is back.
+  // Through requestSubmit, like the keyboard shortcut, so the held message
+  // is validated and announced exactly as a press of the button would be.
+  useEffect(() => {
+    if (!online || !heldForConnection || status !== "idle") return;
+
+    setHeldForConnection(false);
+    formRef.current?.requestSubmit();
+  }, [online, heldForConnection, status]);
 
   // The sent list in another tab of this browser. Somebody who sends from one
   // tab and comes back to an older one found it still listing the history as
@@ -1517,9 +1537,10 @@ export default function App() {
     // Held rather than attempted. The draft is already saved, so nothing is
     // lost by waiting, and the note above the button says so.
     if (!online) {
+      setHeldForConnection(true);
       if (liveRegionRef.current) {
         liveRegionRef.current.textContent =
-          "You're offline. Your message is saved here — send it once you're back online.";
+          "You're offline. Your message is saved here and will send once you're back online.";
       }
       return;
     }
@@ -1715,6 +1736,7 @@ export default function App() {
     setSentReplyAt(null);
     setSentAbout("");
     setCarried(null);
+    setHeldForConnection(false);
     setStatus("idle");
   };
 
@@ -2867,7 +2889,7 @@ export default function App() {
             </button>
           </div>
 
-          <form className="bc-form" onSubmit={handleSubmit} noValidate>
+          <form ref={formRef} className="bc-form" onSubmit={handleSubmit} noValidate>
             {status === "sent" ? (
               <div className="bc-success" role="status">
                 <div className="bc-check-circle">
@@ -3404,8 +3426,9 @@ export default function App() {
 
                 {!online && (
                   <p className="bc-offline" role="status">
-                    You're offline. Your message is saved on this device —
-                    send it once the connection is back.
+                    {heldForConnection
+                      ? "You're offline. Your message is saved on this device and will send by itself once the connection is back — change it and it waits for you to press send again."
+                      : "You're offline. Your message is saved on this device — send it once the connection is back."}
                   </p>
                 )}
 

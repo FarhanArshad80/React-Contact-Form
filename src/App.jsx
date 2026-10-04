@@ -1274,6 +1274,30 @@ export default function App() {
     }
   };
 
+  // Every reference on one clipboard, a line each with what it was about.
+  // Chasing several open threads in one email meant copying them one by one.
+  const ALL_REFERENCES = "*all*";
+
+  const copyAllReferences = async () => {
+    const lines = sent.map(
+      (item) => `${item.reference} — ${findTopic(item.topic)?.label || "Something else"} — ${sentWhen(item.at)}`
+    );
+
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopiedRef(ALL_REFERENCES);
+
+      if (liveRegionRef.current) {
+        liveRegionRef.current.textContent = `${lines.length} references copied.`;
+      }
+    } catch {
+      if (liveRegionRef.current) {
+        liveRegionRef.current.textContent =
+          "Couldn't reach the clipboard — select the references to copy them by hand.";
+      }
+    }
+  };
+
   const validate = (field, val) => {
     if (field === "topic") return !findTopic(val) ? "Pick what this is about." : "";
     if (field === "name") {
@@ -3590,13 +3614,22 @@ export default function App() {
                     </p>
 
                     {sent.length > 1 && (
-                      <button
-                        type="button"
-                        className="bc-following-clear bc-history-clear"
-                        onClick={forgetAllSent}
-                      >
-                        Remove all from this browser
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="bc-following-clear bc-history-clear"
+                          onClick={copyAllReferences}
+                        >
+                          {copiedRef === ALL_REFERENCES ? "All copied" : "Copy all references"}
+                        </button>{" "}
+                        <button
+                          type="button"
+                          className="bc-following-clear bc-history-clear"
+                          onClick={forgetAllSent}
+                        >
+                          Remove all from this browser
+                        </button>
+                      </>
                     )}
                   </details>
                 )}

@@ -523,6 +523,29 @@ export function removePasswords(message) {
   });
 }
 
+// A message typed with caps lock on reads as shouting to whoever opens it,
+// which is rarely what the sender meant. Only flagged once there is enough
+// text to judge, so "VPN DOWN" or an order number on its own does not count.
+const SHOUTING_MIN_LETTERS = 20;
+const SHOUTING_RATIO = 0.8;
+
+export function isShouting(message) {
+  const letters = String(message || "").match(/\p{L}/gu) || [];
+  if (letters.length < SHOUTING_MIN_LETTERS) return false;
+
+  const upper = letters.filter((ch) => ch !== ch.toLowerCase()).length;
+  return upper / letters.length >= SHOUTING_RATIO;
+}
+
+// Back to ordinary sentence case: lower everything, then raise the first
+// letter of each sentence and the word "I".
+export function calmCase(message) {
+  return String(message || "")
+    .toLowerCase()
+    .replace(/(^\s*|[.!?]\s+|\n\s*)(\p{L})/gu, (_, lead, ch) => lead + ch.toUpperCase())
+    .replace(/\bi\b/g, "I");
+}
+
 // A reference gives the sender something to quote when they follow up, and
 // it is the first thing a desk asks for. The prefix says which queue it
 // belongs to; the body is random rather than sequential so it does not
@@ -1064,6 +1087,9 @@ export default function App() {
   // The address in the message the sender has said not to reply to. Held as
   // the address, like keptEmail, so naming a different one asks again.
   const [keptReplyTo, setKeptReplyTo] = useState("");
+  // Set once the sender has said the capitals are on purpose. Cleared when
+  // the message is emptied, so the next message is judged on its own.
+  const [keptCaps, setKeptCaps] = useState(false);
   // Whether this visit opened onto someone else's half-written message —
   // their own from last time, or a colleague's on a shared machine. Read
   // from storage a second time rather than from `values`, so that typing the
@@ -1702,6 +1728,20 @@ export default function App() {
 
     if (liveRegionRef.current) {
       liveRegionRef.current.textContent = "Password removed from the message.";
+    }
+  };
+
+  const shouting = !keptCaps && isShouting(values.message);
+
+  useEffect(() => {
+    if (!values.message.trim()) setKeptCaps(false);
+  }, [values.message]);
+
+  const calmMessage = () => {
+    setValues((v) => ({ ...v, message: calmCase(v.message) }));
+
+    if (liveRegionRef.current) {
+      liveRegionRef.current.textContent = "Message changed to ordinary capitals.";
     }
   };
 
@@ -3199,6 +3239,28 @@ export default function App() {
                           Take it out
                         </button>
                       </span>
+                    </div>
+                  )}
+                  {shouting && (
+                    <div className="bc-suggest" role="status">
+                      <span>
+                        Caps lock looks like it was on — all capitals can read
+                        as shouting.{" "}
+                        <button
+                          type="button"
+                          className="bc-suggest-fix"
+                          onClick={calmMessage}
+                        >
+                          Use ordinary capitals
+                        </button>
+                      </span>
+                      <button
+                        type="button"
+                        className="bc-suggest-keep"
+                        onClick={() => setKeptCaps(true)}
+                      >
+                        Keep as is
+                      </button>
                     </div>
                   )}
                   {/* Under the message rather than up beside the topic

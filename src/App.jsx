@@ -1343,9 +1343,19 @@ export default function App() {
   // its spacing is the sender's.
   const TRIMMED_FIELDS = ["name", "email"];
 
+  // Inside the name, a run of spaces is a slip of the thumb and would be
+  // copied as-is into "Hi Jordan   Blake" at the desk. One space is what was
+  // meant.
+  const tidy = (field, raw) => {
+    if (!TRIMMED_FIELDS.includes(field)) return raw;
+
+    const trimmed = raw.trim();
+    return field === "name" ? trimmed.replace(/\s{2,}/g, " ") : trimmed;
+  };
+
   const handleBlur = (field) => (e) => {
     const raw = e.target.value;
-    const val = TRIMMED_FIELDS.includes(field) ? raw.trim() : raw;
+    const val = tidy(field, raw);
 
     if (val !== raw) setValues((v) => ({ ...v, [field]: val }));
 

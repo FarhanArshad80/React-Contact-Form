@@ -1350,7 +1350,13 @@ export default function App() {
     if (!TRIMMED_FIELDS.includes(field)) return raw;
 
     const trimmed = raw.trim();
-    return field === "name" ? trimmed.replace(/\s{2,}/g, " ") : trimmed;
+    if (field === "name") return trimmed.replace(/\s{2,}/g, " ");
+
+    // The part after the @ is case-blind, and "Company.COM" from a phone's
+    // auto-capitalise makes the address look mistyped when it is not. The
+    // part before it is left alone: a few mail servers do read its case.
+    const at = trimmed.lastIndexOf("@");
+    return at > 0 ? trimmed.slice(0, at + 1) + trimmed.slice(at + 1).toLowerCase() : trimmed;
   };
 
   const handleBlur = (field) => (e) => {

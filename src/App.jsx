@@ -1786,6 +1786,10 @@ export default function App() {
   };
 
   const remaining = MESSAGE_MAX - values.message.length;
+  // Characters are what the limit counts, but words are how a sender judges
+  // whether they have said enough — "80/600" does not say that it is one
+  // sentence long.
+  const messageWords = values.message.trim() ? values.message.trim().split(/\s+/).length : 0;
   const counterState =
     remaining < 0 ? "bc-counter-over" : remaining <= 60 ? "bc-counter-warn" : "";
 
@@ -3348,7 +3352,7 @@ export default function App() {
                       aria-label={
                         remaining < 0
                           ? `${-remaining} characters over the ${MESSAGE_MAX} limit`
-                          : `${values.message.length} of ${MESSAGE_MAX} characters used`
+                          : `${messageWords} ${messageWords === 1 ? "word" : "words"}, ${values.message.length} of ${MESSAGE_MAX} characters used`
                       }
                     >
                       {/* Past the limit "642/600" leaves the subtraction to
@@ -3356,7 +3360,7 @@ export default function App() {
                           to cut. */}
                       {remaining < 0
                         ? `${-remaining} over`
-                        : `${values.message.length}/${MESSAGE_MAX}`}
+                        : `${messageWords > 0 ? `${messageWords} ${messageWords === 1 ? "word" : "words"} · ` : ""}${values.message.length}/${MESSAGE_MAX}`}
                     </span>
                   </div>
                 </div>

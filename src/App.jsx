@@ -3566,7 +3566,18 @@ export default function App() {
                           <span>
                             {findTopic(item.topic)?.label || "Something else"}
                             {" · "}
-                            {sentWhen(item.at)}
+                            {/* "4 days ago" is the right thing to read and
+                                the wrong thing to quote to the desk; the
+                                exact moment is a hover away. */}
+                            <time
+                              dateTime={new Date(item.at).toISOString()}
+                              title={new Date(item.at).toLocaleString(undefined, {
+                                dateStyle: "full",
+                                timeStyle: "short",
+                              })}
+                            >
+                              {sentWhen(item.at)}
+                            </time>
                             {/* Two messages about one problem read as one
                                 thread here, the same way they will at the
                                 desk. */}

@@ -850,11 +850,16 @@ function openingTimeText() {
 // at 2am on a Sunday is not a promise anyone can keep, so out of hours the
 // eyebrow says when the desk is back instead.
 function deskStatus(now = new Date()) {
-  const { day, hour } = deskClock(now);
+  const { day, hour, minute } = deskClock(now);
   const working = WORKING_DAYS.includes(day);
 
   if (working && hour >= OPEN_HOUR && hour < CLOSE_HOUR) {
-    return { open: true };
+    // "Open now" at twenty to six is true for twenty minutes. In the last
+    // hour the time left is said too, so a long message is not started on
+    // the belief that somebody is there to read it the moment it lands.
+    const left = CLOSE_MINUTE - (hour * 60 + minute);
+
+    return { open: true, closingIn: left <= 60 ? left : null };
   }
 
   // Still before opening on a working day — the wait is only this morning.
@@ -2962,7 +2967,9 @@ export default function App() {
                 nearly useless at two minutes to six, and out of hours it
                 does not even say five minutes from when. */}
             {desk.open
-              ? `Open now — expect a reply ${replyEstimate}`
+              ? `Open now${
+                  desk.closingIn ? ` (closes in ${desk.closingIn} min)` : ""
+                } — expect a reply ${replyEstimate}`
               : `Closed — the desk is back ${desk.returns}, expect a reply ${replyEstimate}`}
           </div>
 

@@ -828,6 +828,19 @@ export function replyByText(estimate) {
   return `by ${DAY_NAMES[estimate.day]} ${time}`;
 }
 
+// The week the desk keeps, for anyone deciding whether to write now or
+// first thing tomorrow. Built from the same constants as the status line so
+// the two cannot disagree.
+function deskHoursText() {
+  const first = DAY_NAMES[WORKING_DAYS[0]];
+  const last = DAY_NAMES[WORKING_DAYS[WORKING_DAYS.length - 1]];
+
+  return `Open ${first} to ${last}, ${clockText(OPEN_HOUR, 0)} – ${clockText(
+    CLOSE_HOUR,
+    0
+  )} ${DESK_TIMEZONE_LABEL}`;
+}
+
 function openingTimeText() {
   const hour = OPEN_HOUR % 12 || 12;
   return `${hour}:00 ${OPEN_HOUR < 12 ? "am" : "pm"} ${DESK_TIMEZONE_LABEL}`;
@@ -2937,7 +2950,10 @@ export default function App() {
 
       <section className="bc-section">
         <div>
-          <div className={`bc-eyebrow ${desk.open ? "" : "bc-eyebrow-closed"}`}>
+          <div
+            className={`bc-eyebrow ${desk.open ? "" : "bc-eyebrow-closed"}`}
+            title={deskHoursText()}
+          >
             <span
               className={`bc-eyebrow-dot ${desk.open ? "" : "bc-eyebrow-dot-off"}`}
               aria-hidden="true"

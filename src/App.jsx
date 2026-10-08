@@ -3454,9 +3454,16 @@ export default function App() {
                       </button>
                     </p>
 
+                    {/* Once something is attached the limit that matters is
+                        what is left of it, not the total. */}
                     <small>
                       Images or PDF · up to {formatBytes(MAX_FILE_BYTES)} each ·
-                      {" "}{MAX_FILES} files max
+                      {" "}
+                      {files.length === 0
+                        ? `${MAX_FILES} files max`
+                        : files.length >= MAX_FILES
+                        ? "no room for more files"
+                        : `room for ${MAX_FILES - files.length} more`}
                     </small>
 
                     <input

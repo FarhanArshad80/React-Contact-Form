@@ -3528,6 +3528,12 @@ export default function App() {
 
                   {files.length > 0 && (
                     <small className="bc-attachment-note">
+                      {/* Each file has its size beside it; the sum is what a
+                          slow connection is going to have to send. */}
+                      {files.length > 1 &&
+                        `${files.length} files, ${formatBytes(
+                          files.reduce((sum, item) => sum + item.file.size, 0)
+                        )} in all. `}
                       Attachments aren't kept in your saved draft — reloading
                       the page will ask for them again.
                     </small>

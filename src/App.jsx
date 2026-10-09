@@ -3372,6 +3372,13 @@ export default function App() {
                     <span
                       className={`bc-counter ${counterState}`}
                       id="bc-message-counter"
+                      // The counter shows what is used; hovering answers the
+                      // other half of the question, how much room is left.
+                      title={
+                        remaining >= 0
+                          ? `${remaining} ${remaining === 1 ? "character" : "characters"} left`
+                          : undefined
+                      }
                       aria-label={
                         remaining < 0
                           ? `${-remaining} characters over the ${MESSAGE_MAX} limit`

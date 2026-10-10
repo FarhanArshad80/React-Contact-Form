@@ -3518,6 +3518,11 @@ export default function App() {
                           <span className="bc-attachment-meta">
                             <strong>{item.file.name}</strong>
                             <small>
+                              {/* A screenshot saved as HEIC or a PDF renamed
+                                  by a phone can carry a name that says
+                                  nothing; the type says what the desk will
+                                  actually be opening. */}
+                              {(item.file.type.split("/")[1] || "file").toUpperCase()} ·{" "}
                               {formatBytes(item.file.size)}
                               {/* The one to drop first if the send is slow
                                   or a file has to go. Only when it is the

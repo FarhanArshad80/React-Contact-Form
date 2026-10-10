@@ -3517,7 +3517,18 @@ export default function App() {
 
                           <span className="bc-attachment-meta">
                             <strong>{item.file.name}</strong>
-                            <small>{formatBytes(item.file.size)}</small>
+                            <small>
+                              {formatBytes(item.file.size)}
+                              {/* The one to drop first if the send is slow
+                                  or a file has to go. Only when it is the
+                                  single largest; a tie points at nothing. */}
+                              {files.length > 1 &&
+                                item.file.size ===
+                                  Math.max(...files.map((other) => other.file.size)) &&
+                                files.filter((other) => other.file.size === item.file.size)
+                                  .length === 1 &&
+                                " · largest"}
+                            </small>
                           </span>
 
                           <button

@@ -3063,7 +3063,10 @@ export default function App() {
                     half-written message with no obvious way out of it. */}
                 {restored && (
                   <div className="bc-restored" role="status">
-                    <p>
+                    {/* "Saved 3 days ago" is the right size for a glance;
+                        hovering gives the exact moment, for telling one
+                        session's draft from another's. */}
+                    <p title={restoredAt ? new Date(restoredAt).toLocaleString() : undefined}>
                       Picked up where you left off
                       {/* A draft from a build before timestamps says nothing
                           about when, rather than guessing at it. */}

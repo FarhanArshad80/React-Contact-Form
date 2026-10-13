@@ -1064,6 +1064,9 @@ export default function App() {
   const [files, setFiles] = useState([]);
   const [fileError, setFileError] = useState("");
   const [dragging, setDragging] = useState(false);
+  // Caps Lock left on turns a message into shouting before anyone notices,
+  // and the box gives no sign of it until the text is already there.
+  const [capsLock, setCapsLock] = useState(false);
   const [reference, setReference] = useState("");
   // Which reference was last copied, rather than a bare yes/no: the success
   // screen is no longer the only place one can be copied from, and a shared
@@ -3229,7 +3232,11 @@ export default function App() {
                     placeholder={selectedTopic?.prompt || DEFAULT_PROMPT}
                     value={values.message}
                     onChange={handleChange("message")}
-                    onBlur={handleBlur("message")}
+                    onBlur={(event) => {
+                      setCapsLock(false);
+                      handleBlur("message")(event);
+                    }}
+                    onKeyUp={(event) => setCapsLock(event.getModifierState?.("CapsLock") ?? false)}
                     // The message box is where a message is finished, and
                     // reaching the send button from it meant tabbing through
                     // the attachment controls first. Ctrl/⌘ + Enter is the
@@ -3357,6 +3364,12 @@ export default function App() {
                       >
                         Keep {selectedTopic?.label || "as is"}
                       </button>
+                    </div>
+                  )}
+
+                  {capsLock && (
+                    <div className="bc-suggest" role="status">
+                      <span>Caps Lock is on.</span>
                     </div>
                   )}
 

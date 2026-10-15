@@ -3147,6 +3147,17 @@ export default function App() {
                       <label
                         key={topic.id}
                         className={`bc-topic ${values.topic === topic.id ? "bc-topic-on" : ""}`}
+                        // Who picks it up and how soon, before choosing: the
+                        // reply time otherwise only appears once it is sent.
+                        title={`Answered by ${topic.desk}, usually within ${
+                          topic.replyMinutes < 60
+                            ? `${topic.replyMinutes} minutes`
+                            : topic.replyMinutes === 60
+                            ? "an hour"
+                            : topic.replyMinutes >= 9 * 60
+                            ? "one working day"
+                            : `${Math.round(topic.replyMinutes / 60)} hours`
+                        }`}
                       >
                         <input
                           type="radio"

@@ -2898,6 +2898,7 @@ export default function App() {
           transition: border-color 0.2s ease;
         }
         .bc-again:hover { border-color: var(--accent); }
+        a.bc-again { display: inline-block; text-decoration: none; font-family: inherit; }
 
         /* ---------- Beacon illustration ---------- */
         .bc-illustration {
@@ -3041,6 +3042,19 @@ export default function App() {
                   <button type="button" className="bc-again" onClick={saveCopy}>
                     Save a copy
                   </button>
+                  {/* The inbox is where people go looking for a reference
+                      weeks later, and the desk keeps no copy to send. This
+                      opens the sender's own mail app with it filled in. */}
+                  <a
+                    className="bc-again"
+                    href={`mailto:${encodeURIComponent(values.email)}?subject=${encodeURIComponent(
+                      `Contact reference ${reference}`
+                    )}&body=${encodeURIComponent(
+                      `Reference: ${reference}\nSent to: ${selectedTopic?.desk || "the team"}\nReply expected ${sentReplyBy}.`
+                    )}`}
+                  >
+                    Email me the reference
+                  </a>
                   {/* Only when there is a time to put in a calendar. */}
                   {sentReplyAt && (
                     <button type="button" className="bc-again" onClick={saveReminder}>

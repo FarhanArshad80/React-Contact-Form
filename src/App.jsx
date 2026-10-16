@@ -3017,7 +3017,14 @@ export default function App() {
                 </p>
                 <div className="bc-reference">
                   <span className="bc-reference-label">Your reference</span>
-                  <code className="bc-reference-code">{reference}</code>
+                  {/* The alphabet leaves out the look-alikes, which is worth
+                      knowing when reading it off a screen to somebody. */}
+                  <code
+                    className="bc-reference-code"
+                    title="Quote this if you get in touch about this message. It has no 0, O, 1 or I, so none of those can be mixed up."
+                  >
+                    {reference}
+                  </code>
                   <button
                     type="button"
                     className="bc-reference-copy"

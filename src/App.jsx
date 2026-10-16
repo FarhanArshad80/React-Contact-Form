@@ -3082,7 +3082,14 @@ export default function App() {
                       Remind me {sentReplyBy}
                     </button>
                   )}
-                  <button type="button" className="bc-again" onClick={sendAnother}>
+                  {/* Says up front what it keeps, so nobody retypes their
+                      name expecting a blank form. */}
+                  <button
+                    type="button"
+                    className="bc-again"
+                    onClick={sendAnother}
+                    title="Starts a new message with your name and email already filled in"
+                  >
                     Send another message
                   </button>
                 </div>

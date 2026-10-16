@@ -3027,6 +3027,20 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* When it went, which is the first thing asked by anyone
+                    chasing a reply: "I wrote to you on Tuesday at four". */}
+                {sentAt && (
+                  <p className="bc-success-files">
+                    Sent{" "}
+                    {sentAt.toLocaleString(undefined, {
+                      weekday: "long",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                    .
+                  </p>
+                )}
+
                 {files.length > 0 && (
                   <p className="bc-success-files">
                     {files.length === 1

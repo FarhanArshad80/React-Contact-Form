@@ -3443,9 +3443,15 @@ export default function App() {
                       id="bc-message-counter"
                       // The counter shows what is used; hovering answers the
                       // other half of the question, how much room is left.
+                      // Reading time at about 200 words a minute, so a
+                      // long message can be trimmed before the desk has to.
                       title={
                         remaining >= 0
-                          ? `${remaining} ${remaining === 1 ? "character" : "characters"} left`
+                          ? `${remaining} ${remaining === 1 ? "character" : "characters"} left${
+                              messageWords > 0
+                                ? ` · about ${Math.max(1, Math.round((messageWords / 200) * 60))} sec to read`
+                                : ""
+                            }`
                           : undefined
                       }
                       aria-label={

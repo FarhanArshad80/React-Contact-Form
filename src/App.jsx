@@ -3532,7 +3532,15 @@ export default function App() {
 
                     {/* Once something is attached the limit that matters is
                         what is left of it, not the total. */}
-                    <small>
+                    <small
+                      title={
+                        files.length > 0
+                          ? `${formatBytes(
+                              files.reduce((sum, item) => sum + item.file.size, 0)
+                            )} attached so far`
+                          : undefined
+                      }
+                    >
                       Images or PDF · up to {formatBytes(MAX_FILE_BYTES)} each ·
                       {" "}
                       {files.length === 0

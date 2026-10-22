@@ -3585,7 +3585,15 @@ export default function App() {
                           </a>
 
                           <span className="bc-attachment-meta">
-                            <strong>{item.file.name}</strong>
+                            {/* Long names are cut off by the row; the date
+                                tells two "Screenshot.png" apart. */}
+                            <strong
+                              title={`${item.file.name} · modified ${new Date(
+                                item.file.lastModified
+                              ).toLocaleString()}`}
+                            >
+                              {item.file.name}
+                            </strong>
                             <small>
                               {/* A screenshot saved as HEIC or a PDF renamed
                                   by a phone can carry a name that says

@@ -3049,7 +3049,10 @@ export default function App() {
                 )}
 
                 {files.length > 0 && (
-                  <p className="bc-success-files">
+                  <p
+                    className="bc-success-files"
+                    title={files.length > 1 ? files.map((item) => item.file.name).join("\n") : undefined}
+                  >
                     {files.length === 1
                       ? `${files[0].file.name} went with it.`
                       : `${files.length} attachments went with it.`}

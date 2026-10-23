@@ -3036,8 +3036,10 @@ export default function App() {
 
                 {/* When it went, which is the first thing asked by anyone
                     chasing a reply: "I wrote to you on Tuesday at four". */}
+                {/* The weekday is enough this week; a screenshot of this
+                    looked at next month needs the date. */}
                 {sentAt && (
-                  <p className="bc-success-files">
+                  <p className="bc-success-files" title={sentAt.toLocaleString()}>
                     Sent{" "}
                     {sentAt.toLocaleString(undefined, {
                       weekday: "long",

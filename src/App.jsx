@@ -3457,7 +3457,7 @@ export default function App() {
                                 ? ` · about ${Math.max(1, Math.round((messageWords / 200) * 60))} sec to read`
                                 : ""
                             }`
-                          : undefined
+                          : `Cut ${-remaining} ${remaining === -1 ? "character" : "characters"} to send`
                       }
                       aria-label={
                         remaining < 0

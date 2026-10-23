@@ -3599,7 +3599,18 @@ export default function App() {
                             {item.file.type === "application/pdf" ? (
                               <span className="bc-attachment-thumb bc-attachment-pdf">PDF</span>
                             ) : (
-                              <img className="bc-attachment-thumb" src={item.url} alt="" />
+                              <img
+                                className="bc-attachment-thumb"
+                                src={item.url}
+                                alt=""
+                                // A screenshot cropped too tight or saved at
+                                // thumbnail size shows its problem in pixels.
+                                onLoad={(event) => {
+                                  const { naturalWidth, naturalHeight } = event.currentTarget;
+                                  event.currentTarget.parentElement.title =
+                                    `${naturalWidth} × ${naturalHeight} px · open in a new tab`;
+                                }}
+                              />
                             )}
                           </a>
 

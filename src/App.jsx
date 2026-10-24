@@ -3735,7 +3735,9 @@ export default function App() {
                           <div className="bc-history-what">
                           <code>{item.reference}</code>
                           <span>
-                            {findTopic(item.topic)?.label || "Something else"}
+                            <span title={findTopic(item.topic)?.desk ? `Handled by ${findTopic(item.topic).desk}` : undefined}>
+                              {findTopic(item.topic)?.label || "Something else"}
+                            </span>
                             {" · "}
                             {/* "4 days ago" is the right thing to read and
                                 the wrong thing to quote to the desk; the

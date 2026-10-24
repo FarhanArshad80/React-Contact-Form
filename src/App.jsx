@@ -3721,7 +3721,12 @@ export default function App() {
                   <details className="bc-history">
                     <summary ref={historySummaryRef}>
                       Sent from this browser before
-                      <span className="bc-history-count">{sent.length}</span>
+                      <span
+                        className="bc-history-count"
+                        title={`The latest went ${sentWhen(Math.max(...sent.map((item) => item.at)))}`}
+                      >
+                        {sent.length}
+                      </span>
                     </summary>
 
                     <ul>

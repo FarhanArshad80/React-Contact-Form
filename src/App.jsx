@@ -3795,6 +3795,7 @@ export default function App() {
                             className="bc-history-copy"
                             onClick={followUp(item)}
                             aria-label={`Follow up on ${item.reference}`}
+                            title={`Write another message to the same desk about ${item.reference}`}
                           >
                             Follow up
                           </button>

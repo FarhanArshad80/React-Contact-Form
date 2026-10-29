@@ -3123,7 +3123,11 @@ export default function App() {
                       {restoredAt ? ` — saved ${sentWhen(restoredAt)}.` : "."}
                     </p>
 
-                    <button type="button" onClick={discardDraft}>
+                    <button
+                      type="button"
+                      onClick={discardDraft}
+                      title="Clear the saved draft · you can undo straight after"
+                    >
                       Start fresh
                     </button>
 

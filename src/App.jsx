@@ -3132,6 +3132,7 @@ export default function App() {
                       className="bc-restored-close"
                       onClick={() => setRestored(false)}
                       aria-label="Dismiss"
+                      title="Dismiss"
                     >
                       ×
                     </button>
@@ -3163,6 +3164,7 @@ export default function App() {
                       className="bc-restored-close"
                       onClick={() => setDiscarded(null)}
                       aria-label="Dismiss"
+                      title="Dismiss"
                     >
                       ×
                     </button>

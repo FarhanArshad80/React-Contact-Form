@@ -3650,6 +3650,7 @@ export default function App() {
                             className="bc-attachment-remove"
                             onClick={removeFile(item.id)}
                             aria-label={`Remove ${item.file.name}`}
+                            title={`Remove ${item.file.name}`}
                           >
                             ×
                           </button>

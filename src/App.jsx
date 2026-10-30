@@ -3029,6 +3029,7 @@ export default function App() {
                     type="button"
                     className="bc-reference-copy"
                     onClick={copyReference(reference)}
+                    title="Copy the reference to quote if you get in touch again"
                   >
                     {copiedRef === reference ? "Copied" : "Copy"}
                   </button>

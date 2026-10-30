@@ -3065,7 +3065,12 @@ export default function App() {
                     automatically: most people do not need a file, and a
                     download nobody asked for is its own small rudeness. */}
                 <div className="bc-success-actions">
-                  <button type="button" className="bc-again" onClick={saveCopy}>
+                  <button
+                    type="button"
+                    className="bc-again"
+                    onClick={saveCopy}
+                    title={`Download what you sent as beacon-${reference}.txt`}
+                  >
                     Save a copy
                   </button>
                   {/* The inbox is where people go looking for a reference

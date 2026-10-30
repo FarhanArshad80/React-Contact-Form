@@ -3088,7 +3088,12 @@ export default function App() {
                   </a>
                   {/* Only when there is a time to put in a calendar. */}
                   {sentReplyAt && (
-                    <button type="button" className="bc-again" onClick={saveReminder}>
+                    <button
+                      type="button"
+                      className="bc-again"
+                      onClick={saveReminder}
+                      title="Download a calendar reminder for when a reply is due"
+                    >
                       Remind me {sentReplyBy}
                     </button>
                   )}

@@ -3280,6 +3280,7 @@ export default function App() {
                           type="button"
                           className="bc-suggest-fix"
                           onClick={acceptEmailSuggestion}
+                          title="Use this address instead"
                         >
                           {emailSuggestion}
                         </button>

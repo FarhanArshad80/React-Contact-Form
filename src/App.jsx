@@ -3802,6 +3802,7 @@ export default function App() {
                             className="bc-history-copy"
                             onClick={copyReference(item.reference)}
                             aria-label={`Copy reference ${item.reference}`}
+                            title={`Copy ${item.reference} to quote to the desk`}
                           >
                             {copiedRef === item.reference ? "Copied" : "Copy"}
                           </button>

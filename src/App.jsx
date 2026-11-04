@@ -152,7 +152,7 @@ function editDistance(a, b, limit) {
 // form that says nothing. So a domain that is already known is left alone,
 // and so is anything more than a slip away from one — two edits from
 // gmail.com is as likely to be a small company nobody here has heard of.
-export function suggestEmail(email) {
+function suggestEmail(email) {
   const address = String(email || "").trim();
   const at = address.lastIndexOf("@");
 
@@ -198,7 +198,7 @@ export function suggestEmail(email) {
 // and the sender is left believing they were ignored.
 const NO_REPLY_RE = /^(?:no[-_.]?reply|do[-_.]?not[-_.]?reply|dont[-_.]?reply|mailer[-_.]daemon)(?:[-_.+].*)?$/i;
 
-export function isNoReplyAddress(email) {
+function isNoReplyAddress(email) {
   const address = String(email || "").trim();
   const at = address.lastIndexOf("@");
 
@@ -217,7 +217,7 @@ export function isNoReplyAddress(email) {
 const REPLY_ADDRESS_PATTERN =
   /(?:\b(?:reply|respond|write back|get back to me|contact me|reach me|e-?mail me)\b[^@\n]{0,20}?\b(?:at|to|on|via)|\bmy (?:new |other |work |personal |current |correct )?(?:e-?mail(?: address)?|address) is)\s+<?([^\s@<>"']+@[^\s@<>"']+)/gi;
 
-export function replyAddressInMessage(message, email) {
+function replyAddressInMessage(message, email) {
   const current = String(email || "").trim().toLowerCase();
 
   for (const match of String(message || "").matchAll(REPLY_ADDRESS_PATTERN)) {
@@ -336,7 +336,7 @@ const TOPIC_CONFIDENCE = 2;
 // when another desk beats the chosen one outright and clears the bar above
 // it — a message that mentions both is exactly the message nobody should be
 // second-guessed on.
-export function suggestTopic(message, chosenId) {
+function suggestTopic(message, chosenId) {
   const text = String(message || "");
 
   if (text.trim().length < 20) return "";
@@ -402,7 +402,7 @@ const ATTACHMENT_PROMISES = [
   /\bi('ve| have)\s+(sent|included)\b/i,
 ];
 
-export function mentionsAttachment(message) {
+function mentionsAttachment(message) {
   const text = String(message || "");
 
   return ATTACHMENT_PROMISES.some((pattern) => pattern.test(text));
@@ -437,7 +437,7 @@ function passesLuhn(digits) {
   return sum % 10 === 0;
 }
 
-export function findCardNumbers(message) {
+function findCardNumbers(message) {
   const text = String(message || "");
 
   return (text.match(CARD_PATTERN) || []).filter((candidate) =>
@@ -447,7 +447,7 @@ export function findCardNumbers(message) {
 
 // The same message with every card number cut down to the last four digits,
 // which is all anyone at the desk will ask for.
-export function maskCardNumbers(message) {
+function maskCardNumbers(message) {
   return String(message || "").replace(CARD_PATTERN, (candidate) => {
     const digits = candidate.replace(/\D/g, "");
 
@@ -502,7 +502,7 @@ function passwordMatch(match) {
   return { label, separator, quoted: quoted !== undefined, word: quoted ?? bare };
 }
 
-export function findPasswords(message) {
+function findPasswords(message) {
   const found = [];
 
   for (const match of String(message || "").matchAll(PASSWORD_PATTERN)) {
@@ -515,7 +515,7 @@ export function findPasswords(message) {
 
 // The label is kept so the message still reads as the sender wrote it; only
 // the secret goes, quotes and all.
-export function removePasswords(message) {
+function removePasswords(message) {
   return String(message || "").replace(PASSWORD_PATTERN, (...args) => {
     const { label, separator, quoted, word } = passwordMatch(args);
 
@@ -529,7 +529,7 @@ export function removePasswords(message) {
 const SHOUTING_MIN_LETTERS = 20;
 const SHOUTING_RATIO = 0.8;
 
-export function isShouting(message) {
+function isShouting(message) {
   const letters = String(message || "").match(/\p{L}/gu) || [];
   if (letters.length < SHOUTING_MIN_LETTERS) return false;
 
@@ -539,7 +539,7 @@ export function isShouting(message) {
 
 // Back to ordinary sentence case: lower everything, then raise the first
 // letter of each sentence and the word "I".
-export function calmCase(message) {
+function calmCase(message) {
   return String(message || "")
     .toLowerCase()
     .replace(/(^\s*|[.!?]\s+|\n\s*)(\p{L})/gu, (_, lead, ch) => lead + ch.toUpperCase())
@@ -580,7 +580,7 @@ function makeReference(topicId) {
 //
 // Handing the text over rather than keeping it resolves both: the sender
 // leaves with a record, and the site still holds nothing.
-export function messageCopy({ reference, topic, values, files, replyBy, about, sentAt }) {
+function messageCopy({ reference, topic, values, files, replyBy, about, sentAt }) {
   const lines = [
     "Beacon — message sent",
     `Reference: ${reference}`,
@@ -678,7 +678,7 @@ const CLOSE_MINUTE = CLOSE_HOUR * 60;
 // when? So the wait is walked through the hours the desk actually keeps -
 // starting at the next moment it is open, and carrying whatever is left over
 // closing time into the following working day.
-export function replyBy(now, minutes, clock = deskClock) {
+function replyBy(now, minutes, clock = deskClock) {
   const { day, hour, minute } = clock(now);
 
   let dayIndex = day;
@@ -746,7 +746,7 @@ function zoneWallClock(date, zone) {
   return Date.UTC(read("year"), read("month") - 1, read("day"), read("hour"), read("minute"));
 }
 
-export function replyInstant(now, estimate, zone = DESK_TIMEZONE) {
+function replyInstant(now, estimate, zone = DESK_TIMEZONE) {
   const today = new Date(zoneWallClock(now, zone));
   const wall = Date.UTC(
     today.getUTCFullYear(),
@@ -788,7 +788,7 @@ function icsStamp(date) {
 // opens. The event carries the reference, because the reference is what
 // they will need in their hand if they have to chase it — and nothing else
 // from the message, for the same reason the form keeps nothing else.
-export function replyReminder({ reference, topic, replyAt, stamp = new Date() }) {
+function replyReminder({ reference, topic, replyAt, stamp = new Date() }) {
   const end = new Date(replyAt.getTime() + 15 * 60 * 1000);
   const desk = topic?.desk || "the Beacon team";
 
@@ -819,7 +819,7 @@ export function replyReminder({ reference, topic, replyAt, stamp = new Date() })
 // "by 3:20 pm ET", with the day named only when it is not this one - the
 // common case is an answer within the hour, and "today" on every message
 // would be noise.
-export function replyByText(estimate) {
+function replyByText(estimate) {
   const time = `${clockText(estimate.hour, estimate.minute)} ${DESK_TIMEZONE_LABEL}`;
 
   if (estimate.daysAhead === 0) return `by ${time}`;
@@ -891,7 +891,7 @@ const DRAFT_KEEPS_MS = 30 * 24 * 60 * 60 * 1000;
 // When the draft was last written. Kept apart from the four field values so
 // that `values` stays exactly the shape the form renders, and a draft saved
 // by an older build — which carries no timestamp — still restores.
-export function loadDraftSavedAt() {
+function loadDraftSavedAt() {
   try {
     const saved = JSON.parse(localStorage.getItem(DRAFT_KEY));
     const at = Number(saved?.savedAt);
@@ -930,7 +930,7 @@ function loadDraft() {
 // Whoever wrote that link already knows what the visitor is here about, and
 // making them answer the question again is the form ignoring it. Anything
 // that is not one of the desks is ignored rather than guessed at.
-export function topicFromUrl(search = typeof window !== "undefined" ? window.location.search : "") {
+function topicFromUrl(search = typeof window !== "undefined" ? window.location.search : "") {
   try {
     const asked = new URLSearchParams(search).get("topic")?.trim().toLowerCase();
 
@@ -992,7 +992,7 @@ function loadSent() {
 // goes anywhere the message itself has not already been.
 const SUMMARY_MAX = 64;
 
-export function summarise(message) {
+function summarise(message) {
   const text = String(message || "").trim();
 
   if (!text) return "";
@@ -1025,7 +1025,7 @@ const FOLLOW_UP_LINE = new RegExp(
   `^\\s*Following up on [A-Z]{3}-[${REFERENCE_ALPHABET}]{${REFERENCE_LENGTH}}:?`
 );
 
-export function followUpBody(message) {
+function followUpBody(message) {
   return String(message || "").replace(FOLLOW_UP_LINE, "").trim();
 }
 

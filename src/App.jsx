@@ -1682,11 +1682,11 @@ export default function App() {
   };
 
   const selectedTopic = findTopic(values.topic);
-  // Recomputed with the desk status, which re-reads the clock every minute,
-  // so the estimate ages with the page rather than with the tab.
-  const replyEstimate = useMemo(
-    () => replyByText(replyBy(new Date(), selectedTopic?.replyMinutes ?? DEFAULT_REPLY_MINUTES)),
-    [desk, selectedTopic]
+  // Worked out on every render rather than memoised: the desk status timer
+  // re-renders once a minute, so the estimate ages with the page rather
+  // than with the tab, and the sum is far cheaper than tracking the clock.
+  const replyEstimate = replyByText(
+    replyBy(new Date(), selectedTopic?.replyMinutes ?? DEFAULT_REPLY_MINUTES)
   );
   // Only once they have left the field. Every address is a typo halfway
   // through being typed, and a form that corrects mid-word is arguing with

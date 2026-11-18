@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Practice scripts kept locally, not part of the app
+src/assets/*.py
+src/assets/*.cpp
+src/assets/.vscode/

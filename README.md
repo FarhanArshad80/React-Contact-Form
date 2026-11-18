@@ -1,12 +1,44 @@
-# React + Vite
+# React Contact Form
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A support contact form built with React and Vite. It is designed to catch
+the mistakes that stop a reply from ever reaching the sender.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Topic, name, email and message fields** with inline validation.
+- **Email typo suggestions** that catch slips like `gmial.com` or `.con`
+  and offer the address you probably meant.
+- **No-reply address warning** when the email looks like one that never
+  reads replies.
+- **Attachments**: up to 3 images or PDFs (PNG, JPEG, GIF, WebP, PDF),
+  5 MB each.
+- **Draft autosave** so a half-written message survives a reload, plus a
+  20-second undo after discarding a draft.
+- **Recently sent list** showing your last 5 messages.
+- **Keyboard shortcut**: send with Ctrl + Enter (⌘ + Enter on Mac).
+- **Message box that grows with your text** up to a fixed height, then
+  scrolls.
 
-## Expanding the ESLint configuration
+## Getting started
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm install
+npm run dev
+```
+
+Then open the URL Vite prints (usually http://localhost:5173).
+
+## Scripts
+
+| Command           | What it does                         |
+| ----------------- | ------------------------------------ |
+| `npm run dev`     | Start the dev server with hot reload |
+| `npm run build`   | Build for production into `dist/`    |
+| `npm run preview` | Serve the production build locally   |
+| `npm run lint`    | Run ESLint                           |
+
+## Tech stack
+
+- React 19
+- Vite
+- ESLint

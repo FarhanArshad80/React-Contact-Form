@@ -5,6 +5,12 @@
     <link rel="icon" type="image/jpeg" href="/logo.jpeg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Get in touch with support. The form catches email typos, saves your draft and takes screenshots or PDFs." />
+    <!-- In the page head so the fonts start loading straight away, rather
+         than after React has rendered the <style> block that used to
+         @import them. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,500&amp;family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap" />
     <title>React Contact Form</title>
   </head>
   <body>

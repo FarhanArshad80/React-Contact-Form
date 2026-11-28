@@ -2046,8 +2046,6 @@ export default function App() {
   return (
     <div className="bc-root">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,500&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
-
         :root {
           --bg: #0e2a2d;
           --bg-elevated: #123638;
